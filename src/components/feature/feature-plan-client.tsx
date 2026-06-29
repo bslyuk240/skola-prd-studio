@@ -13,7 +13,7 @@ import {
   ArrowLeft, FileText, Shield, Database, Map, Palette,
   Code2, GitBranch, CheckSquare, Rocket, Loader2,
   RefreshCw, Eye, Wand2, Clock, CheckCircle2, AlertCircle,
-  Globe, Lock, Layers,
+  Globe, Lock, Layers, Download, FileCode,
 } from "lucide-react";
 import { cn, scoreColor } from "@/lib/utils";
 
@@ -48,6 +48,28 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
   const router = useRouter();
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  async function downloadExport(format: "html" | "markdown") {
+    setDownloading(format);
+    try {
+      const res = await fetch(`/api/feature/${request.id}/export?format=${format}`);
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const slug = request.featureName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      a.download = `${slug}-feature-plan.${format === "html" ? "html" : "md"}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${format === "html" ? "HTML" : "Markdown"} exported!`);
+    } catch {
+      toast.error("Export failed. Please try again.");
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   const readyDocs = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const progress = Math.round((readyDocs / 9) * 100);
@@ -97,10 +119,36 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
           <h1 className="text-2xl font-bold text-foreground">{request.featureName}</h1>
           <p className="text-muted-foreground text-sm mt-0.5 max-w-2xl">{request.featureDescription}</p>
         </div>
-        <Button onClick={generateAll} className="gap-2 shrink-0">
-          <Wand2 className="w-4 h-4" />
-          Generate All
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadExport("markdown")}
+            disabled={downloading !== null}
+            className="gap-1.5"
+          >
+            {downloading === "markdown"
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FileText className="w-4 h-4" />}
+            .md
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadExport("html")}
+            disabled={downloading !== null}
+            className="gap-1.5"
+          >
+            {downloading === "html"
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FileCode className="w-4 h-4" />}
+            .html
+          </Button>
+          <Button onClick={generateAll} className="gap-2">
+            <Wand2 className="w-4 h-4" />
+            Generate All
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
