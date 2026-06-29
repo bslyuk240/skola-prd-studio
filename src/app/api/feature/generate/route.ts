@@ -5,6 +5,7 @@ import { featureRequests, featureDocuments, repoConnections, userPreferences } f
 import { eq, and } from "drizzle-orm";
 import { buildFeaturePrompt, FeatureContext } from "@/lib/feature-prompts";
 import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
+import { calcFeatureDocCredits } from "@/lib/credits";
 import { z } from "zod";
 
 const schema = z.object({
@@ -87,10 +88,12 @@ export async function POST(req: NextRequest) {
     const prompt = buildFeaturePrompt(documentType, ctx);
     const content = await generateText(prompt, model);
     const wordCount = content.split(/\s+/).length;
+    const aiCreditsUsed = calcFeatureDocCredits(wordCount);
 
     await db.update(featureDocuments).set({
       content,
       wordCount,
+      aiCreditsUsed,
       status: "ready",
       updatedAt: new Date(),
     }).where(and(eq(featureDocuments.featureRequestId, featureRequestId), eq(featureDocuments.type, documentType)));

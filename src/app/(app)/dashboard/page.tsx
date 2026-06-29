@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatRelative, scoreColor, scoreLabel } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { CreditUsageWidget } from "@/components/dashboard/credit-usage-widget";
 
 const DOC_LABELS: Record<string, string> = {
   prd: "PRD",
@@ -243,6 +244,9 @@ export default async function DashboardPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* AI credit usage */}
+          <CreditUsageWidget />
 
           {/* Document types quick guide */}
           <Card>

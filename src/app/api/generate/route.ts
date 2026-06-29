@@ -5,6 +5,7 @@ import { projects, documents, userPreferences } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { buildPrompt, ProjectContext } from "@/lib/ai-prompts";
 import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
+import { calcDocCredits } from "@/lib/credits";
 import { z } from "zod";
 
 const schema = z.object({
@@ -56,12 +57,14 @@ export async function POST(req: NextRequest) {
     const prompt = buildPrompt(documentType, ctx);
     const content = await generateText(prompt, model);
     const wordCount = content.split(/\s+/).length;
+    const aiCreditsUsed = calcDocCredits(wordCount);
 
     await db
       .update(documents)
       .set({
         content,
         wordCount,
+        aiCreditsUsed,
         status: "ready",
         version: 1,
         updatedAt: new Date(),

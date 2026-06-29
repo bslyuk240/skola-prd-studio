@@ -18,6 +18,7 @@ import {
   GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CreditUsageCompact } from "@/components/dashboard/credit-usage-widget";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -107,6 +108,11 @@ export function Sidebar({ projectId, projectName }: SidebarProps) {
           </>
         )}
       </nav>
+
+      {/* Credit gauge */}
+      <div className="border-t border-sidebar-border pt-2">
+        <CreditUsageCompact />
+      </div>
 
       {/* Bottom */}
       <div className="border-t border-sidebar-border px-3 py-3 space-y-0.5">

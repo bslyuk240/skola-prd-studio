@@ -7,6 +7,7 @@ import { scanGithubRepo, redactSecrets, type DetectedStack } from "@/lib/github-
 import { runSecurityAnalysis } from "@/lib/security-scanner";
 import { buildSecurityPrdPrompt } from "@/lib/security-prd-prompt";
 import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
+import { SECURITY_SCAN_CREDITS } from "@/lib/credits";
 import { z } from "zod";
 
 const schema = z.object({
@@ -162,6 +163,7 @@ export async function POST(req: NextRequest) {
     await db.update(securityScans).set({
       prdContent,
       agentPrompt,
+      aiCreditsUsed: SECURITY_SCAN_CREDITS,
       status: "complete",
       updatedAt: new Date(),
     }).where(eq(securityScans.id, scan.id));

@@ -119,6 +119,7 @@ export const documents = pgTable("documents", {
   status: documentStatusEnum("status").default("pending"),
   content: text("content"),
   wordCount: integer("word_count").default(0),
+  aiCreditsUsed: integer("ai_credits_used").default(0).notNull(),
   version: integer("version").default(1),
   approvedAt: timestamp("approved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -292,6 +293,7 @@ export const featureDocuments = pgTable("feature_documents", {
   status: documentStatusEnum("status").default("pending"),
   content: text("content"),
   wordCount: integer("word_count").default(0),
+  aiCreditsUsed: integer("ai_credits_used").default(0).notNull(),
   approvedAt: timestamp("approved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -363,6 +365,7 @@ export const securityScans = pgTable("security_scans", {
   // The generated Security Fix PRD content
   prdContent: text("prd_content"),
   agentPrompt: text("agent_prompt"),
+  aiCreditsUsed: integer("ai_credits_used").default(0).notNull(),
   status: securityScanStatusEnum2("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
