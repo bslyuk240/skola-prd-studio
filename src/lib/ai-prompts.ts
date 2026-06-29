@@ -55,6 +55,18 @@ Security Level: ${ctx.securityLevel ?? "standard"}
 `.trim();
 }
 
+const EXPORT_SECURITY_REQUIREMENTS = `
+Export and download security requirements:
+- Every export, download, CSV, PDF, report, or bulk data endpoint must require authentication.
+- Every export query must filter by the authenticated user's ownership, role, tenant, or organisation scope.
+- A user must never be able to export another user's data by changing an ID, route parameter, query parameter, or filename.
+- Exports that include personal, financial, admin, or tenant data must be audit logged.
+- Export endpoints must validate requested format, date ranges, filters, and resource IDs server-side.
+- Long-running exports must use queued jobs with ownership checks when users fetch the generated file.
+- Generated export files must use short-lived signed URLs or server-mediated downloads, not public permanent links.
+- Error messages must not reveal whether another user's resource exists.
+`.trim();
+
 export function buildPrompt(docType: string, ctx: ProjectContext): string {
   const context = baseContext(ctx);
 
@@ -92,11 +104,13 @@ The TRD must include these sections:
 7. Third-party Integrations
 8. Environment Variables Required (table with variable name, description, example)
 9. API Endpoints Summary (markdown table: Method | Endpoint | Auth Required | Description)
-10. Scalability Considerations
-11. Performance Requirements
-12. Logging & Monitoring Strategy
-13. Testing Requirements
-14. Deployment Strategy & CI/CD
+10. Export & Download Endpoint Security
+${EXPORT_SECURITY_REQUIREMENTS}
+11. Scalability Considerations
+12. Performance Requirements
+13. Logging & Monitoring Strategy
+14. Testing Requirements
+15. Deployment Strategy & CI/CD
 
 Format in clean Markdown. Include specific technical recommendations matching the chosen stack.`,
 
@@ -257,13 +271,16 @@ Show ALL tables and ALL relationships.
 4. API Endpoints (full REST CRUD for each resource):
    - Method | Endpoint | Auth | Request Body | Response (markdown table)
 
-5. Row Level Security (RLS) Policies — for each table, who can SELECT/INSERT/UPDATE/DELETE
+5. Export & Download Data Access
+${EXPORT_SECURITY_REQUIREMENTS}
 
-6. File Storage Structure (if applicable)
+6. Row Level Security (RLS) Policies — for each table, who can SELECT/INSERT/UPDATE/DELETE
 
-7. Data Validation Rules (per field where important)
+7. File Storage Structure (if applicable)
 
-8. Seed Data Recommendations
+8. Data Validation Rules (per field where important)
+
+9. Seed Data Recommendations
 
 Include SQL CREATE TABLE statements for the 3 most important tables.`,
 
@@ -351,22 +368,25 @@ Customise this to the actual app architecture.
 6. Role-Based Access Control
    - Permission matrix (table: Role | Resource | Create | Read | Update | Delete)
 
-7. API Security Headers (table of all required security headers with values)
+7. Export & Download Security
+${EXPORT_SECURITY_REQUIREMENTS}
 
-8. Database Security
+8. API Security Headers (table of all required security headers with values)
+
+9. Database Security
    - RLS policy approach
    - Parameterised query requirement
    - Sensitive field encryption
 
-9. File Upload Security (if applicable)
+10. File Upload Security (if applicable)
 
-10. Environment Variable Protection
+11. Environment Variable Protection
     - Which variables are secret vs public
     - Never-log list
 
-11. Audit Logging Requirements (table: Event | What to log | Severity)
+12. Audit Logging Requirements (table: Event | What to log | Severity)
 
-12. Security Checklist
+13. Security Checklist
 | Control | Status | Priority | Notes |
 |---------|--------|----------|-------|
 | Server-side validation | ☐ Todo | Critical | |
@@ -381,8 +401,11 @@ Customise this to the actual app architecture.
 | Audit logging | ☐ Todo | Medium | |
 | Env vars not in code | ☐ Todo | Critical | |
 | Dependency scanning | ☐ Todo | Medium | |
+| Export routes authenticated | ☐ Todo | High | |
+| Export queries scoped to owner/tenant/role | ☐ Todo | Critical | |
+| Sensitive exports audit logged | ☐ Todo | Medium | |
 
-13. Recommended Security Libraries for ${ctx.frontendFramework ?? "the chosen stack"}
+14. Recommended Security Libraries for ${ctx.frontendFramework ?? "the chosen stack"}
 
 Format in clean Markdown with all tables and diagrams included.`,
   };

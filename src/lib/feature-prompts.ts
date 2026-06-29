@@ -61,6 +61,18 @@ ${ctx.additionalContext ? `Additional Context: ${ctx.additionalContext}` : ""}
 `.trim();
 }
 
+const FEATURE_EXPORT_REQUIREMENTS = `
+Export and download security requirements:
+- If this feature adds or changes export, download, CSV, PDF, report, or bulk data functionality, every endpoint must require authentication.
+- Every export query must filter by the authenticated user's ownership, role, tenant, or organisation scope.
+- Users must not be able to export another user's data by changing an ID, route parameter, query parameter, or filename.
+- Sensitive exports must be audit logged with actor, scope, filters, format, and timestamp.
+- Validate export format, date ranges, filters, and resource IDs server-side.
+- For long-running exports, use queued jobs and re-check ownership before file download.
+- Use short-lived signed URLs or server-mediated downloads for generated files.
+- Return generic errors that do not reveal whether another user's resource exists.
+`.trim();
+
 export function buildFeaturePrompt(docType: string, ctx: FeatureContext): string {
   const context = projectContext(ctx);
 
@@ -84,6 +96,7 @@ The Feature PRD must include:
 - Which existing modules this feature touches
 - Which existing user journeys are affected
 - Which existing data this feature reads or writes
+- Whether this feature introduces or changes export/download/report flows
 
 ## 3. Feature Scope (${ctx.scopeLevel?.toUpperCase() ?? "MVP"})
 - What IS included in this delivery
@@ -247,22 +260,25 @@ For each new endpoint, provide:
 - Validation rules
 - Rate limiting requirements
 
-## 3. Modified Existing Endpoints
+## 3. Export & Download Endpoints
+${FEATURE_EXPORT_REQUIREMENTS}
+
+## 4. Modified Existing Endpoints
 For each endpoint that changes:
 - What changes and why
 - Is it backwards compatible?
 - If not: what is the migration strategy?
 
-## 4. Deprecated Endpoints (if any)
+## 5. Deprecated Endpoints (if any)
 What to deprecate and the deprecation timeline.
 
-## 5. Request/Response Examples
+## 6. Request/Response Examples
 Concrete JSON examples for each new endpoint.
 
-## 6. Middleware Changes
+## 7. Middleware Changes
 Any changes to auth middleware, rate limiting, or validation middleware.
 
-## 7. Error Handling
+## 8. Error Handling
 New error codes and messages for this feature. Must follow existing error format.
 
 Format in clean Markdown with JSON code blocks.`,
@@ -343,12 +359,18 @@ Which actions in this feature must be logged for compliance/audit?
 | Action | What to Log | Severity |
 |--------|-------------|----------|
 
-## 7. Notification Security (if applicable)
+## 7. Export & Download Security
+${FEATURE_EXPORT_REQUIREMENTS}
+
+## 8. Notification Security (if applicable)
 ${ctx.needsNotifications ? "This feature sends notifications. Ensure: no PII in notification previews, verified recipient before sending, rate limit notification sends per user." : "No notifications required."}
 
-## 8. Security Checklist
+## 9. Security Checklist
 | Control | Status | Priority | Notes |
 |---------|--------|----------|-------|
+| Export routes authenticated | ☐ Todo | High | |
+| Export queries scoped to owner/tenant/role | ☐ Todo | Critical | |
+| Sensitive exports audit logged | ☐ Todo | Medium | |
 | Server-side validation on all new inputs | ☐ Todo | Critical | |
 | Auth check on all new API routes | ☐ Todo | Critical | |
 | Ownership check (user can only act on own data) | ☐ Todo | Critical | |
@@ -402,6 +424,7 @@ gantt
 ### Phase 4: Security Implementation
 | Task | Files to Change | Priority | Effort | Acceptance Criteria |
 |------|----------------|----------|--------|---------------------|
+Include export/download authentication, ownership scoping, audit logging, signed URL, and error-message tasks if the feature exposes exports.
 
 ### Phase 5: Testing
 | Task | Files to Change | Priority | Effort | Acceptance Criteria |
@@ -445,11 +468,15 @@ Existing features that must still work after this change is deployed:
 ## 7. Security Tests
 | Attack Vector | Test Method | Expected Result |
 |---------------|-------------|-----------------|
+Include export/download tests for unauthenticated access, cross-user/tenant ID tampering, invalid filters, excessive date ranges, and generated file access after logout or scope changes.
 
-## 8. Edge Cases
+## 8. Export & Download Test Coverage
+${FEATURE_EXPORT_REQUIREMENTS}
+
+## 9. Edge Cases
 List non-obvious scenarios that must be tested.
 
-## 9. Test Data Requirements
+## 10. Test Data Requirements
 What seed data or fixtures are needed to run tests.
 
 Format in clean Markdown.`,
