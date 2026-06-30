@@ -3,6 +3,7 @@ import { z } from "zod";
 export const mcpToolNameSchema = z.enum([
   "get_project_blueprint",
   "get_next_approved_task",
+  "get_active_tasks",
   "report_task_progress",
   "report_task_completed",
   "create_question_for_user",

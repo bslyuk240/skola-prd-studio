@@ -24,6 +24,11 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
+    name: "get_active_tasks",
+    description: "Fetch full task packets for every task this connection currently has claimed (status in_progress). Use this to resume work in a new session without re-claiming.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "report_task_progress",
     description: "Submit a progress update for a task (in_progress, blocked, or needs_review).",
     inputSchema: {
@@ -128,6 +133,9 @@ export async function POST(req: NextRequest) {
       case "get_next_approved_task":
         return rpcResult(id, await getNextApprovedTask(connection.projectId, connection.id));
 
+      case "get_active_tasks":
+        return rpcResult(id, await getActiveTasks(connection.projectId, connection.id));
+
       case "report_task_progress": {
         const p = reportProgressParams.safeParse(args);
         if (!p.success) return rpcError(id, -32602, "Invalid params for report_task_progress");
@@ -227,6 +235,26 @@ async function getNextApprovedTask(projectId: string, connectionId: string) {
   const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
 
   return { sessionId: session.id, ...buildTaskPacket(project!, task, docs) };
+}
+
+async function getActiveTasks(projectId: string, connectionId: string) {
+  const tasks = await db
+    .select()
+    .from(buildTasks)
+    .where(
+      and(
+        eq(buildTasks.projectId, projectId),
+        eq(buildTasks.assignedConnectionId, connectionId),
+        eq(buildTasks.status, "in_progress")
+      )
+    );
+
+  if (tasks.length === 0) return { tasks: [], message: "No tasks currently claimed by this connection." };
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
+
+  return { tasks: tasks.map((task) => buildTaskPacket(project!, task, docs)) };
 }
 
 async function findOwnedTask(projectId: string, connectionId: string, taskId: string) {
