@@ -10,6 +10,8 @@ import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
 import { SECURITY_SCAN_CREDITS } from "@/lib/credits";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const schema = z.object({
   provider: z.enum(["github", "manual"]).default("github"),
   repoUrl: z.string().optional(),

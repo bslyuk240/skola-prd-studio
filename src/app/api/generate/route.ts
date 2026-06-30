@@ -8,6 +8,8 @@ import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
 import { calcDocCredits } from "@/lib/credits";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const schema = z.object({
   projectId: z.string().min(1),
   documentType: z.enum(["prd", "trd", "app_flow", "ux_brief", "backend_schema", "implementation_plan", "security_blueprint"]),

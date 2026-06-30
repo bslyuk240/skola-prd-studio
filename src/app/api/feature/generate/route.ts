@@ -8,6 +8,8 @@ import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
 import { calcFeatureDocCredits } from "@/lib/credits";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const schema = z.object({
   featureRequestId: z.string().min(1),
   documentType: z.enum([
