@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton, useClerk, useUser } from "@clerk/nextjs";
 import {
@@ -13,7 +14,6 @@ import {
   Download,
   Settings,
   HelpCircle,
-  Layers,
   LogOut,
   GitBranch,
 } from "lucide-react";
@@ -49,9 +49,7 @@ export function Sidebar({ projectId, projectName }: SidebarProps) {
     <aside className="w-60 shrink-0 flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
-        <div className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center shrink-0">
-          <Layers className="w-4 h-4 text-brand-foreground" />
-        </div>
+        <Image src="/prd-logo.png" alt="SkolaTech PRD Studio" width={28} height={28} className="rounded-lg shrink-0" />
         <div>
           <p className="text-[10px] font-medium text-sidebar-foreground/50 uppercase tracking-widest leading-none">SkolaTech</p>
           <p className="text-sm font-bold text-sidebar-foreground leading-tight">PRD Studio</p>

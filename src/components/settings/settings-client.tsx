@@ -1,21 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { UserButton } from "@clerk/nextjs";
 import {
-  User, Key, Bot, Shield, Palette,
-  Check, Eye, EyeOff, ExternalLink,
+  User, Key, Bot, Shield, Palette, Zap,
+  Check, ExternalLink,
   CheckCircle2, XCircle, Loader2,
+  FileText, GitBranch,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -24,6 +24,7 @@ const TABS = [
   { id: "ai", label: "AI Model", icon: Bot },
   { id: "security", label: "Security Defaults", icon: Shield },
   { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "usage", label: "Usage", icon: Zap },
 ] as const;
 
 type Tab = typeof TABS[number]["id"];
@@ -75,6 +76,232 @@ interface Props {
     autoRefresh: boolean;
   };
   envStatus: { hasOpenRouter: boolean; hasDatabase: boolean; hasClerk: boolean };
+}
+
+const DOC_LABELS: Record<string, string> = {
+  prd: "PRD", trd: "TRD", app_flow: "App Flow", ux_brief: "UI/UX Brief",
+  backend_schema: "Backend Schema", implementation_plan: "Implementation Plan",
+  security_blueprint: "Security Blueprint",
+};
+
+const FEAT_LABELS: Record<string, string> = {
+  feature_prd: "Feature PRD", impact_analysis: "Impact Analysis",
+  schema_changes: "Schema Changes", api_changes: "API Changes",
+  ui_changes: "UI Changes", security_checklist: "Security Checklist",
+  implementation_tasks: "Implementation Tasks", test_plan: "Test Plan",
+  deployment_plan: "Deployment Plan",
+};
+
+interface UsageDetail {
+  totalConsumed: number;
+  limit: number;
+  remaining: number;
+  percentage: number;
+  breakdown: { blueprintCredits: number; featureCredits: number; securityCredits: number };
+  blueprintDocs: { id: string; type: string; projectName: string; wordCount: number | null; aiCreditsUsed: number | null }[];
+  featureDocs: { id: string; type: string; featureName: string; wordCount: number | null; aiCreditsUsed: number | null }[];
+  scans: { id: string; provider: string; repoOwner: string | null; repoName: string | null; safeToShipScore: number | null; aiCreditsUsed: number | null }[];
+}
+
+function UsageTabContent() {
+  const [data, setData] = useState<UsageDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/user/credits/detail")
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <div className="h-8 bg-muted rounded-lg animate-pulse" />
+        <div className="h-24 bg-muted rounded-xl animate-pulse" />
+        <div className="h-32 bg-muted rounded-xl animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!data) return <p className="text-sm text-muted-foreground">Failed to load usage data.</p>;
+
+  const { totalConsumed, limit, remaining, percentage, breakdown, blueprintDocs, featureDocs, scans } = data;
+  const isWarning = percentage >= 70;
+  const isCritical = percentage >= 90;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-foreground">AI Credit Usage</h2>
+        <p className="text-muted-foreground text-sm mt-0.5">Track generation consumption across all features.</p>
+      </div>
+
+      {/* Total bar */}
+      <Card className={cn(isCritical && "border-red-200")}>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Consumed</span>
+            <Zap className={cn("w-4 h-4", isCritical ? "text-red-500" : isWarning ? "text-amber-500" : "text-muted-foreground")} />
+          </div>
+          <div className="flex items-end gap-2 mb-2">
+            <p className={cn("text-3xl font-bold", isCritical ? "text-red-600" : isWarning ? "text-amber-500" : "text-foreground")}>
+              {totalConsumed.toLocaleString()}
+            </p>
+            <p className="text-sm text-muted-foreground mb-1">/ {limit.toLocaleString()}</p>
+          </div>
+          <Progress value={percentage} className={cn("h-2 mb-2", isCritical ? "[&>div]:bg-red-500" : isWarning ? "[&>div]:bg-amber-500" : "")} />
+          <p className="text-xs text-muted-foreground">{remaining} credits remaining</p>
+        </CardContent>
+      </Card>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Blueprint Docs", value: breakdown.blueprintCredits, icon: FileText },
+          { label: "Feature Docs", value: breakdown.featureCredits, icon: GitBranch },
+          { label: "Security Scans", value: breakdown.securityCredits, icon: Shield },
+        ].map(({ label, value, icon: Icon }) => (
+          <Card key={label}>
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
+                <Icon className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <p className="text-3xl font-bold text-foreground">{value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Breakdown bar */}
+      {totalConsumed > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-4">Usage Breakdown</p>
+            <div className="space-y-3">
+              {[
+                { label: "Blueprint Documents", value: breakdown.blueprintCredits, color: "bg-blue-500" },
+                { label: "Feature Documents", value: breakdown.featureCredits, color: "bg-emerald-500" },
+                { label: "Security Scans", value: breakdown.securityCredits, color: "bg-red-500" },
+              ].map(({ label, value, color }) => (
+                <div key={label}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-medium text-foreground">{value} credits</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full", color)}
+                      style={{ width: `${Math.round((value / totalConsumed) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Blueprint doc log */}
+      {blueprintDocs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" /> Blueprint Document Generations
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4">
+            <div className="space-y-2">
+              {blueprintDocs.map((doc) => (
+                <div key={doc.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="text-xs">{DOC_LABELS[doc.type] ?? doc.type}</Badge>
+                    <span className="text-sm text-muted-foreground truncate max-w-[180px]">{doc.projectName}</span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {doc.wordCount ? <span className="text-xs text-muted-foreground">{doc.wordCount.toLocaleString()} words</span> : null}
+                    <span className="text-xs font-semibold text-foreground">{doc.aiCreditsUsed} credits</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Feature doc log */}
+      {featureDocs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <GitBranch className="w-4 h-4 text-emerald-600" /> Feature Document Generations
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4">
+            <div className="space-y-2">
+              {featureDocs.map((doc) => (
+                <div key={doc.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="text-xs">{FEAT_LABELS[doc.type] ?? doc.type}</Badge>
+                    <span className="text-sm text-muted-foreground truncate max-w-[180px]">{doc.featureName}</span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {doc.wordCount ? <span className="text-xs text-muted-foreground">{doc.wordCount.toLocaleString()} words</span> : null}
+                    <span className="text-xs font-semibold text-foreground">{doc.aiCreditsUsed} credits</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Security scan log */}
+      {scans.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Shield className="w-4 h-4 text-red-600" /> Security Scans
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4">
+            <div className="space-y-2">
+              {scans.map((scan) => (
+                <div key={scan.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="text-xs capitalize">{scan.provider}</Badge>
+                    <span className="text-sm text-muted-foreground truncate max-w-[180px]">
+                      {scan.repoName ? `${scan.repoOwner}/${scan.repoName}` : "Manual context scan"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {scan.safeToShipScore != null && (
+                      <span className="text-xs text-muted-foreground">{scan.safeToShipScore}/100</span>
+                    )}
+                    <span className="text-xs font-semibold text-foreground">{scan.aiCreditsUsed} credits</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {totalConsumed === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="p-12 text-center">
+            <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <h3 className="font-semibold text-foreground mb-1">No usage yet</h3>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+              Generate blueprint documents, feature plans, or run a security scan to see credit consumption here.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }
 
 function StatusDot({ ok }: { ok: boolean }) {
@@ -180,7 +407,7 @@ export function SettingsClient({ user, prefs, envStatus }: Props) {
 
         {/* ── Account ── */}
         {activeTab === "account" && (
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-foreground">Account</h2>
               <p className="text-muted-foreground text-sm mt-0.5">Your profile and account details.</p>
@@ -247,7 +474,7 @@ export function SettingsClient({ user, prefs, envStatus }: Props) {
 
         {/* ── API Keys ── */}
         {activeTab === "api" && (
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-foreground">API Keys</h2>
               <p className="text-muted-foreground text-sm mt-0.5">
@@ -334,7 +561,7 @@ export function SettingsClient({ user, prefs, envStatus }: Props) {
 
         {/* ── AI Model ── */}
         {activeTab === "ai" && (
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-foreground">AI Model</h2>
               <p className="text-muted-foreground text-sm mt-0.5">
@@ -408,7 +635,7 @@ export function SettingsClient({ user, prefs, envStatus }: Props) {
 
         {/* ── Security Defaults ── */}
         {activeTab === "security" && (
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-foreground">Security Defaults</h2>
               <p className="text-muted-foreground text-sm mt-0.5">
@@ -471,9 +698,12 @@ export function SettingsClient({ user, prefs, envStatus }: Props) {
           </div>
         )}
 
+        {/* ── Usage ── */}
+        {activeTab === "usage" && <UsageTabContent />}
+
         {/* ── Appearance ── */}
         {activeTab === "appearance" && (
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-foreground">Appearance</h2>
               <p className="text-muted-foreground text-sm mt-0.5">Customise how the app looks and behaves.</p>

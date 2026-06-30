@@ -819,6 +819,170 @@ const AUDIT_LOG_PACK: SecurityPack = {
   ],
 };
 
+// Based on the Amospikins "AI Code Security Checklist v2.0" — covers the gaps
+// not already caught by the packs above: SSRF, mass assignment, output
+// encoding, token storage, supply-chain pinning, error handling, crypto
+// defaults, prompt injection, and verify-before-ship process checks.
+const AI_CHECKLIST_PACK: SecurityPack = {
+  id: "ai_code_checklist",
+  name: "AI Code Security Checklist",
+  appliesWhen: () => true,
+  checks: [
+    {
+      title: "Server-side fetch from user-supplied URL (SSRF)",
+      severity: "high",
+      detect(_, paths, content) {
+        const found = contentContains(content, /fetch\(\s*(req\.|request\.|body\.|params\.|query\.)|axios\.(get|post)\(\s*(req\.|body\.|params\.|query\.)/i);
+        if (!found) return null;
+        const hasAllowlist = contentContains(content, /allowlist|allow.?list|ALLOWED_HOSTS|blockPrivateIp|isPrivateIP|ssrf/i);
+        if (hasAllowlist) return null;
+        return {
+          confidence: "likely_gap",
+          description: `Server-side request to a URL derived from user input found in ${found.file}, with no allowlist or private-IP guard detected. An attacker could point the server at internal services or cloud metadata endpoints (SSRF).`,
+          affectedFiles: [found.file],
+          evidence: found.match,
+          recommendation: "Allow-list permitted destination hosts, resolve and block private/internal IP ranges, and never let user input choose an arbitrary host to call.",
+        };
+      },
+    },
+    {
+      title: "Mass assignment — request body bound directly to a model",
+      severity: "high",
+      detect(_, paths, content) {
+        const found = contentContains(content, /\.update\(\s*req\.body\s*\)|\.create\(\s*req\.body\s*\)|set\(\s*\.\.\.req\.body\s*\)|\.values\(\s*\.\.\.body\s*\)|\.update\(\{\s*\.\.\.body/i);
+        if (!found) return null;
+        return {
+          confidence: "likely_gap",
+          description: `An entire request body appears to be bound straight onto a database update/create in ${found.file}. An attacker could set fields like role, isAdmin, or balance simply by adding them to the request.`,
+          affectedFiles: [found.file],
+          evidence: found.match,
+          recommendation: "Whitelist exactly which fields each endpoint accepts (e.g. via a Zod schema with .pick()/.strict()) instead of spreading the raw request body onto the model.",
+        };
+      },
+    },
+    {
+      title: "User-controlled value rendered without escaping (XSS)",
+      severity: "high",
+      detect(_, paths, content) {
+        const found = contentContains(content, /dangerouslySetInnerHTML[^}]*\{\{?\s*__html:\s*(req\.|props\.|input|user|comment|body\.|params\.)|v-html\s*=\s*["'`].*?(req\.|input|user)/i);
+        if (!found) return null;
+        return {
+          confidence: "likely_gap",
+          description: `Possible unescaped rendering of user-controlled content in ${found.file} (dangerouslySetInnerHTML/v-html bound to request or user data). This is the most common flaw in AI-generated UI code.`,
+          affectedFiles: [found.file],
+          evidence: found.match,
+          recommendation: "Sanitise with a library like DOMPurify before rendering raw HTML, or avoid dangerouslySetInnerHTML/v-html entirely for user-controlled content.",
+        };
+      },
+    },
+    {
+      title: "JWT or session token stored in localStorage/sessionStorage",
+      severity: "high",
+      detect(_, paths, content) {
+        const found = contentContains(content, /localStorage\.setItem\(\s*['"`](token|jwt|access_?token|session|auth)['"`]|sessionStorage\.setItem\(\s*['"`](token|jwt|access_?token|session)['"`]/i);
+        if (!found) return null;
+        return {
+          confidence: "confirmed",
+          description: `Auth token stored in browser storage in ${found.file}. Any XSS on the page can read localStorage/sessionStorage and steal the token.`,
+          affectedFiles: [found.file],
+          evidence: found.match,
+          recommendation: "Store session/JWT tokens in httpOnly, Secure, SameSite cookies instead. Never expose tokens to client-side JavaScript that doesn't strictly need them.",
+        };
+      },
+    },
+    {
+      title: "Unpinned or wildcard dependency versions",
+      severity: "medium",
+      detect(_, paths, content) {
+        const pkgJson = content["package.json"];
+        if (!pkgJson) return null;
+        let pkg: { dependencies?: Record<string, string> } = {};
+        try { pkg = JSON.parse(pkgJson); } catch { return null; }
+        const wildcard = Object.entries(pkg.dependencies ?? {}).filter(([, v]) => v === "*" || v === "latest");
+        if (wildcard.length === 0) return null;
+        return {
+          confidence: "confirmed",
+          description: `Dependencies pinned to "*" or "latest": ${wildcard.map(([n]) => n).join(", ")}. AI assistants sometimes invent package names or suggest unpinned/typosquatted ones.`,
+          evidence: wildcard.map(([n, v]) => `${n}: ${v}`).join(", "),
+          recommendation: "Pin every dependency to an exact or caret version, commit the lockfile, and verify the package name and source before installing anything an AI suggested.",
+        };
+      },
+    },
+    {
+      title: "Error responses may leak stack traces or internal details",
+      severity: "medium",
+      detect(_, paths, content) {
+        const found = contentContains(content, /res\.(json|send)\(\s*\{[^}]*\b(err|error)\.(stack|message)\b/i);
+        if (!found) return null;
+        return {
+          confidence: "likely_gap",
+          description: `Raw error object (stack/message) appears to be sent directly in an API response in ${found.file}. This can leak stack traces, file paths, or database details to the client.`,
+          affectedFiles: [found.file],
+          evidence: found.match,
+          recommendation: "Return a generic safe message to the client ('Something went wrong') and log the full error server-side only.",
+        };
+      },
+    },
+    {
+      title: "Math.random() used for tokens, IDs, or secrets",
+      severity: "high",
+      detect(_, paths, content) {
+        const found = contentContains(content, /Math\.random\(\)[^;]*(token|secret|password|otp|reset|code|id\b)/i);
+        if (!found) return null;
+        return {
+          confidence: "confirmed",
+          description: `Math.random() used to generate something security-sensitive in ${found.file}. Math.random() is not cryptographically secure and its output is predictable.`,
+          affectedFiles: [found.file],
+          evidence: found.match,
+          recommendation: "Use crypto.randomBytes() (Node) or crypto.getRandomValues() (browser) for tokens, OTPs, reset codes, and any value that must be unguessable.",
+        };
+      },
+    },
+    {
+      title: "LLM call with unseparated user input (prompt injection)",
+      severity: "high",
+      detect(_, paths, content) {
+        const found = contentContains(content, /(openai|anthropic|generateText|chat\.completions\.create)\([^)]*\$\{[^}]*(req\.|body\.|input|userMessage|prompt)\b/i);
+        if (!found) return null;
+        return {
+          confidence: "needs_review",
+          description: `An LLM call in ${found.file} appears to interpolate user input directly into the prompt with no visible separation between trusted instructions and untrusted content. Prompt injection is the top-ranked risk for AI applications.`,
+          affectedFiles: [found.file],
+          recommendation: "Keep system instructions separate from user content (e.g. system message vs. user message), never let model output trigger dangerous actions unchecked, and validate/sanitise anything the LLM returns before acting on it.",
+        };
+      },
+    },
+    {
+      title: "No abuse-case or negative tests detected",
+      severity: "low",
+      detect(_, paths) {
+        const hasTests = pathsContain(paths, ".test.", ".spec.", "__tests__", "/tests/");
+        if (!hasTests) return null;
+        const hasAbuseTests = pathsContain(paths, "unauthorized", "forbidden", "invalid", "abuse", "security.test", "rate-limit.test");
+        if (hasAbuseTests) return null;
+        return {
+          confidence: "recommended",
+          description: "Test files exist, but none appear to target abuse cases (invalid input, wrong role, expired/missing token, changed IDs, duplicate requests).",
+          recommendation: "Add tests that try to misuse each sensitive feature — not just the happy path. Cover invalid input, missing/expired tokens, wrong roles, and tampered IDs.",
+        };
+      },
+    },
+    {
+      title: "No automated security scanning in CI",
+      severity: "low",
+      detect(_, paths) {
+        const ciFiles = paths.filter((p) => /\.github\/workflows\/.*\.ya?ml$|\.gitlab-ci\.ya?ml$/i.test(p));
+        if (ciFiles.length === 0) return {
+          confidence: "recommended",
+          description: "No CI workflow files detected. Without CI, linting, tests, and secret/dependency scanning aren't enforced before merge.",
+          recommendation: "Add a CI workflow that runs linting, unit tests, secret scanning, and dependency/SAST scanning on every pull request before it can merge.",
+        };
+        return null;
+      },
+    },
+  ],
+};
+
 // ─── Pack registry ─────────────────────────────────────────────────────────────
 
 export const ALL_PACKS: SecurityPack[] = [
@@ -832,6 +996,7 @@ export const ALL_PACKS: SecurityPack[] = [
   PAYMENT_PACK,
   DEPENDENCY_PACK,
   AUDIT_LOG_PACK,
+  AI_CHECKLIST_PACK,
 ];
 
 // ─── Main analysis ────────────────────────────────────────────────────────────

@@ -67,6 +67,58 @@ Export and download security requirements:
 - Error messages must not reveal whether another user's resource exists.
 `.trim();
 
+// Based on the Amospikins "AI Code Security Checklist v2.0" (27 checks, 8 categories).
+// Baked into every Security Blueprint so new projects are built with these
+// requirements from the start, not bolted on after a scan finds the gap.
+function buildAiChecklistRequirements(ctx: ProjectContext) {
+  return `
+AI Code Security Checklist v2.0 requirements — every item below is mandatory unless explicitly marked optional:
+
+A. Foundations
+- Every AI-generated block must be explainable line-by-line before it is accepted (no unexplained copy-paste).
+- No real secrets, customer data, or proprietary business logic must ever be pasted into an AI prompt during development.
+
+B. Identity & Access Control
+- Passwords hashed with bcrypt (cost 12+) or Argon2id. Tokens expire, sessions rotate, repeated failed logins are rate-limited.
+- Authorization is checked on every request, not just authentication — a logged-in user must never reach another user's data, an admin route, or a vendor record by changing an ID.
+${ctx.multiTenancy ? "- Multi-tenant data isolation is mandatory: every query must be scoped to the authenticated tenant/owner. Add row-level security or an equivalent ownership filter on every table that holds tenant data." : ""}
+- Session and auth tokens are stored in httpOnly, Secure, SameSite cookies — never in localStorage or sessionStorage where any XSS could steal them.
+
+C. Input, Output & Injection
+- Every input (forms, APIs, query strings, route params, file uploads, webhooks) is validated server-side for type, length, format, and allowed values.
+- Every value rendered back into HTML, attributes, JavaScript, or queries is encoded for that exact context — no unescaped user content via dangerouslySetInnerHTML/v-html.
+- All database queries are parameterised or built through an ORM — never by joining user input into a raw query string.
+- Any server-side fetch of a URL, image, or webhook target derived from user input must allow-list destinations and block internal/private IP ranges (SSRF protection).
+- Request bodies must never be bound wholesale onto a database model. Whitelist exactly which fields each endpoint accepts (no mass assignment of role, isAdmin, balance, vendor_id, etc.).
+${ctx.fileUpload ? "- File uploads validate type via magic bytes (not just extension/MIME header), enforce size limits, and never allow execution from the upload folder." : ""}
+
+D. Secrets & Supply Chain
+- No API keys, DB passwords, tokens, or .env files ever enter the repository or commit history. Any committed secret must be rotated, not just deleted.
+- Every dependency is reviewed for maintenance status and known vulnerabilities before installing.
+- Dependencies are pinned (no "*" or "latest"), lockfiles are committed, and package names/sources are verified before install — AI assistants sometimes invent or typosquat package names.
+
+${ctx.paymentProvider && ctx.paymentProvider !== "None" ? `E. Money & Integrations
+- Amounts, prices, currency, and payment status are always computed and verified server-side — never trusted from the client. Use idempotency keys so a retried request cannot charge or credit twice.
+- Every payment/webhook callback (${ctx.paymentProvider}, etc.) verifies its provider signature before acting on the payload.
+- Business rules are enforced explicitly — e.g. a dispatch rider cannot change payment status, a vendor cannot see another vendor's orders.
+` : ""}
+F. Operations & Hardening
+- Rate limiting and abuse protection on login, password reset, OTP, checkout, search, and any public API or AI-prompt endpoint.
+- Errors return a safe generic message to the user; full details (stack traces, DB names, file paths, tokens) are logged server-side only, never sent to the client.
+- Security-relevant events (failed logins, permission failures, admin actions, payment events) are logged — but passwords, tokens, and full card data are never logged.
+- CORS is scoped to an explicit origin allowlist (no wildcard in production), security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options) are set, and any generated token/OTP/secret uses crypto.randomBytes() / crypto.getRandomValues() — never Math.random().
+
+G. AI-Specific Risks
+- If this app itself calls an LLM, trusted system instructions must be kept separate from untrusted user content, and any model output that triggers an action must be validated before it runs (prompt injection defence).
+- Re-review security after every AI "improve this" / "make it more secure" edit — re-prompting does not guarantee the new version is safer than the last.
+
+H. Verify Before You Ship
+- Tests cover abuse cases, not just the happy path: invalid input, missing/expired tokens, wrong roles, tampered IDs, duplicate requests.
+- CI runs linting, tests, secret scanning, and dependency/SAST scanning before merge.
+- A competent human reviews and approves the code before it reaches production — automated checks alone are not sufficient sign-off.
+`.trim();
+}
+
 export function buildPrompt(docType: string, ctx: ProjectContext): string {
   const context = baseContext(ctx);
 
@@ -332,6 +384,8 @@ ${context}
 Security Level: ${ctx.securityLevel ?? "standard"}
 Enabled Controls: ${Object.entries(ctx.securityToggles ?? {}).filter(([, v]) => v).map(([k]) => k).join(", ")}
 
+${buildAiChecklistRequirements(ctx)}
+
 The Security Blueprint must include:
 
 1. Security Overview & Risk Assessment (table: Risk | Likelihood | Impact | Mitigation)
@@ -404,6 +458,18 @@ ${EXPORT_SECURITY_REQUIREMENTS}
 | Export routes authenticated | ☐ Todo | High | |
 | Export queries scoped to owner/tenant/role | ☐ Todo | Critical | |
 | Sensitive exports audit logged | ☐ Todo | Medium | |
+| Output encoding on all rendered user content (XSS) | ☐ Todo | High | |
+| SSRF protection on server-side fetches from user input | ☐ Todo | High | |
+| Mass assignment guarded — fields whitelisted per endpoint | ☐ Todo | High | |
+| Session/JWT stored in httpOnly cookie, not localStorage | ☐ Todo | High | |
+| Dependencies pinned, lockfile committed, packages verified | ☐ Todo | Medium | |
+| Crypto-safe randomness (crypto.randomBytes) for tokens/OTPs | ☐ Todo | High | |
+| CORS scoped to explicit allowlist, no wildcard | ☐ Todo | High | |
+${ctx.paymentProvider && ctx.paymentProvider !== "None" ? "| Payment amounts verified server-side, webhook signatures checked | ☐ Todo | Critical | |\n" : ""}| Abuse-case tests (invalid input, wrong role, tampered ID) | ☐ Todo | Medium | |
+| CI runs lint, tests, secret + dependency scanning before merge | ☐ Todo | Medium | |
+| No real secrets/data pasted into AI prompts during dev | ☐ Todo | Critical | |
+| Re-reviewed security after every AI "improve this" edit | ☐ Todo | High | |
+| Human code review completed before production | ☐ Todo | Critical | |
 
 14. Recommended Security Libraries for ${ctx.frontendFramework ?? "the chosen stack"}
 

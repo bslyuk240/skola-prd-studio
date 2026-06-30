@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { ArrowRight, Layers, Shield, Bot, FileText } from "lucide-react";
@@ -12,9 +13,7 @@ export default async function HomePage() {
       {/* Nav */}
       <nav className="flex items-center justify-between px-8 py-5 border-b border-sidebar-border">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
-            <Layers className="w-4.5 h-4.5 text-white" />
-          </div>
+          <Image src="/prd-logo.png" alt="SkolaTech PRD Studio" width={32} height={32} className="rounded-lg" />
           <span className="text-sidebar-foreground font-bold text-lg">SkolaTech PRD Studio</span>
         </div>
         <div className="flex items-center gap-3">

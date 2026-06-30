@@ -11,6 +11,10 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "SkolaTech PRD Studio",
   description: "AI Command Centre for Product Blueprinting & Build Orchestration",
+  icons: {
+    icon: "/prd-logo.png",
+    apple: "/prd-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

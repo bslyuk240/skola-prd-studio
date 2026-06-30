@@ -48,7 +48,7 @@ export function CreditUsageWidget() {
   const isCritical = status.percentage >= 90;
 
   return (
-    <Link href="/dashboard/usage" className="block group">
+    <Link href="/settings" className="block group">
       <Card className={cn("transition-shadow hover:shadow-sm", isCritical && "border-red-200")}>
         <CardContent className="p-5">
           <div className="flex items-center justify-between mb-3">
@@ -118,7 +118,7 @@ export function CreditUsageCompact() {
   const isCritical = status.percentage >= 90;
 
   return (
-    <Link href="/dashboard/usage" className="block px-3 py-2 rounded-md hover:bg-sidebar-accent/50 transition-colors">
+    <Link href="/settings" className="block px-3 py-2 rounded-md hover:bg-sidebar-accent/50 transition-colors">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
           <Zap className={cn("w-3 h-3", isCritical ? "text-red-400" : isWarning ? "text-amber-400" : "text-sidebar-foreground/40")} />

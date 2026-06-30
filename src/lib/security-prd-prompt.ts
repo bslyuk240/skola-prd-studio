@@ -26,6 +26,12 @@ ${f.affectedFiles?.length ? `**Likely affected files:** ${f.affectedFiles.join("
 
   return `You are a senior application security engineer writing a Security Fix PRD. Generate a complete, actionable Security Remediation PRD based on the scan results below.
 
+Reference framework: the Amospikins "AI Code Security Checklist v2.0" — 27 checks across 8 categories (A. Foundations, B. Identity & Access Control, C. Input/Output & Injection, D. Secrets & Supply Chain, E. Money & Integrations, F. Operations & Hardening, G. AI-Specific Risks, H. Verify Before You Ship). Map every finding below to the closest checklist item where relevant. Some checklist items are process-only and cannot be detected from code alone — always include these as manual checklist items regardless of scan findings:
+- A02: Confirm no real secrets, customer records, or confidential code were pasted into an AI prompt.
+- E18: Confirm AI-generated code enforces real business rules, not just technical validity (e.g. a normal user cannot perform an action reserved for a privileged role).
+- G24: Re-review security after every AI "improve this" / "make it more secure" edit, not only the first pass — re-prompting does not guarantee safer code.
+- H27: A competent human must review and approve the code before production, even after automated checks pass.
+
 PROJECT: ${repoName}
 SAFE TO SHIP SCORE: ${score}/100
 
@@ -75,7 +81,7 @@ For each confirmed issue: severity badge, description, evidence, exact fix requi
 For each likely gap: severity, what's missing, why it matters, how to implement.
 
 ## 6. Manual Review Required
-For each item: what to check, how to check it, what a passing result looks like.
+For each item: what to check, how to check it, what a passing result looks like. Include the four process-only checklist items (A02, E18, G24, H27) listed above even if no automated finding triggered them.
 
 ## 7. Recommended Improvements
 Nice-to-have security additions ordered by impact.
@@ -107,7 +113,7 @@ Format this as a markdown code block the user can copy directly.
 If security fixes introduce regressions, what to roll back and how.
 
 ## 14. Post-Fix Validation Checklist
-Checkboxes for every verification step after implementation.
+Checkboxes for every verification step after implementation, including the four process-only items (A02, E18, G24, H27).
 
 Format in clean, professional Markdown. Be specific. Reference actual file paths where detected. Every issue must have a concrete, actionable fix.`;
 }
