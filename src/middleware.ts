@@ -5,6 +5,11 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhook(.*)",
+  // The MCP server authenticates external IDE agents with its own scoped
+  // bearer token (agentConnections.tokenHash), not a Clerk session — Clerk's
+  // cookie-based auth.protect() would otherwise intercept and 404 every
+  // request from an agent that has no browser session.
+  "/api/mcp(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
