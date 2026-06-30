@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { projects, buildTasks, agentLogs, agentQuestions } from "@/db/schema";
+import { projects, buildTasks, agentLogs, agentQuestions, agentConnections } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { TasksBoardClient } from "@/components/tasks/tasks-board-client";
@@ -41,12 +41,19 @@ export default async function TasksPage({ params }: Props) {
     questionsByTask[q.taskId].push(q);
   }
 
+  const connections = await db
+    .select({ id: agentConnections.id, connectionName: agentConnections.connectionName })
+    .from(agentConnections)
+    .where(eq(agentConnections.projectId, projectId));
+  const connectionNameById = Object.fromEntries(connections.map((c) => [c.id, c.connectionName]));
+
   return (
     <TasksBoardClient
       project={project}
       tasks={tasks}
       reportsByTask={latestReportByTask}
       questionsByTask={questionsByTask}
+      connectionNameById={connectionNameById}
     />
   );
 }

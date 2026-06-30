@@ -31,9 +31,10 @@ interface Props {
   tasks: BuildTask[];
   reportsByTask: Record<string, AgentLog>;
   questionsByTask: Record<string, AgentQuestion[]>;
+  connectionNameById: Record<string, string>;
 }
 
-export function TasksBoardClient({ project, tasks: initialTasks, reportsByTask, questionsByTask }: Props) {
+export function TasksBoardClient({ project, tasks: initialTasks, reportsByTask, questionsByTask, connectionNameById }: Props) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [generating, setGenerating] = useState(false);
@@ -173,6 +174,7 @@ export function TasksBoardClient({ project, tasks: initialTasks, reportsByTask, 
                       task={task}
                       report={reportsByTask[task.id]}
                       questions={questionsByTask[task.id] ?? []}
+                      claimedByName={task.assignedConnectionId ? connectionNameById[task.assignedConnectionId] : undefined}
                       busy={busyTaskId === task.id}
                       onStatusChange={updateStatus}
                       onApproveForAgent={approveForAgent}
@@ -194,6 +196,7 @@ interface TaskCardProps {
   task: BuildTask;
   report?: AgentLog;
   questions: AgentQuestion[];
+  claimedByName?: string;
   busy: boolean;
   onStatusChange: (id: string, status: string) => void;
   onApproveForAgent: (id: string) => void;
@@ -201,7 +204,7 @@ interface TaskCardProps {
   onReview: (id: string, decision: "approved" | "reject_revision") => void;
 }
 
-function TaskCard({ task, report, questions, busy, onStatusChange, onApproveForAgent, onCopyPacket, onReview }: TaskCardProps) {
+function TaskCard({ task, report, questions, claimedByName, busy, onStatusChange, onApproveForAgent, onCopyPacket, onReview }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority ?? "medium"];
   const filesChanged = (report?.filesChanged as { filePath: string; riskLevel: string }[] | null) ?? [];
   const testResults = (report?.testResult as { command: string; status: string }[] | null) ?? [];
@@ -218,6 +221,11 @@ function TaskCard({ task, report, questions, busy, onStatusChange, onApproveForA
         {task.isApprovedForAgent && (
           <Badge variant="outline" className="text-xs py-0 text-primary border-primary/30 bg-primary/5">
             Approved for Agent
+          </Badge>
+        )}
+        {claimedByName && (
+          <Badge variant="outline" className="text-xs py-0 text-blue-600 border-blue-200 bg-blue-50">
+            Claimed by {claimedByName}
           </Badge>
         )}
         {openQuestions.length > 0 && (
