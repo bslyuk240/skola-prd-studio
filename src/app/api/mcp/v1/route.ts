@@ -76,6 +76,19 @@ function rpcResult(id: string | number | null | undefined, result: unknown) {
   return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result });
 }
 
+// tools/call results must follow MCP's CallToolResult shape — a `content`
+// array of typed blocks — not an arbitrary JSON object. Clients (Claude
+// Code, Cursor, Windsurf) read result.content[].text to display/parse the
+// output; returning a raw object under `result` silently shows as "no
+// output" even when the call succeeded and mutated data server-side.
+function toolResult(id: string | number | null | undefined, data: unknown) {
+  return NextResponse.json({
+    jsonrpc: "2.0",
+    id: id ?? null,
+    result: { content: [{ type: "text", text: JSON.stringify(data) }] },
+  });
+}
+
 const MCP_PROTOCOL_VERSION = "2024-11-05";
 
 async function authenticate(req: NextRequest) {
@@ -128,30 +141,30 @@ export async function POST(req: NextRequest) {
   try {
     switch (name) {
       case "get_project_blueprint":
-        return rpcResult(id, await getProjectBlueprint(connection.projectId));
+        return toolResult(id, await getProjectBlueprint(connection.projectId));
 
       case "get_next_approved_task":
-        return rpcResult(id, await getNextApprovedTask(connection.projectId, connection.id));
+        return toolResult(id, await getNextApprovedTask(connection.projectId, connection.id));
 
       case "get_active_tasks":
-        return rpcResult(id, await getActiveTasks(connection.projectId, connection.id));
+        return toolResult(id, await getActiveTasks(connection.projectId, connection.id));
 
       case "report_task_progress": {
         const p = reportProgressParams.safeParse(args);
         if (!p.success) return rpcError(id, -32602, "Invalid params for report_task_progress");
-        return rpcResult(id, await reportTaskProgress(connection.projectId, connection.id, p.data));
+        return toolResult(id, await reportTaskProgress(connection.projectId, connection.id, p.data));
       }
 
       case "report_task_completed": {
         const p = reportCompletedParams.safeParse(args);
         if (!p.success) return rpcError(id, -32602, "Invalid params for report_task_completed");
-        return rpcResult(id, await reportTaskCompleted(connection.projectId, connection.id, p.data));
+        return toolResult(id, await reportTaskCompleted(connection.projectId, connection.id, p.data));
       }
 
       case "create_question_for_user": {
         const p = createQuestionParams.safeParse(args);
         if (!p.success) return rpcError(id, -32602, "Invalid params for create_question_for_user");
-        return rpcResult(id, await createQuestionForUser(connection.projectId, p.data));
+        return toolResult(id, await createQuestionForUser(connection.projectId, p.data));
       }
 
       default:
@@ -234,7 +247,7 @@ async function getNextApprovedTask(projectId: string, connectionId: string) {
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
   const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
 
-  return { sessionId: session.id, ...buildTaskPacket(project!, task, docs) };
+  return { task: { sessionId: session.id, ...buildTaskPacket(project!, task, docs) } };
 }
 
 async function getActiveTasks(projectId: string, connectionId: string) {
