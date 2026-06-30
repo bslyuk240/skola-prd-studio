@@ -10,9 +10,10 @@ export const mcpToolNameSchema = z.enum([
 
 export const mcpRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
-  method: z.enum(["tools/list", "list_tools", "tools/call"]),
+  method: z.enum(["initialize", "notifications/initialized", "tools/list", "list_tools", "tools/call"]),
   params: z.any().optional(),
-  id: z.union([z.string(), z.number()]),
+  // Notifications (e.g. notifications/initialized) carry no id per JSON-RPC spec.
+  id: z.union([z.string(), z.number()]).optional(),
 });
 
 export const toolCallParamsSchema = z.object({

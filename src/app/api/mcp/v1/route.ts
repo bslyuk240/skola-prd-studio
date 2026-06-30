@@ -63,13 +63,15 @@ const TOOLS = [
 
 const PRIORITY_WEIGHT: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-function rpcError(id: string | number, code: number, message: string) {
-  return NextResponse.json({ jsonrpc: "2.0", id, error: { code, message } }, { status: 200 });
+function rpcError(id: string | number | null | undefined, code: number, message: string) {
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, { status: 200 });
 }
 
-function rpcResult(id: string | number, result: unknown) {
-  return NextResponse.json({ jsonrpc: "2.0", id, result });
+function rpcResult(id: string | number | null | undefined, result: unknown) {
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result });
 }
+
+const MCP_PROTOCOL_VERSION = "2024-11-05";
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get("authorization") ?? "";
@@ -93,8 +95,21 @@ export async function POST(req: NextRequest) {
   }
   const { id, method, params } = parsed.data;
 
+  // notifications/initialized is a JSON-RPC notification — no id, no response body expected.
+  if (method === "notifications/initialized") {
+    return new NextResponse(null, { status: 202 });
+  }
+
   const connection = await authenticate(req);
   if (!connection) return rpcError(id, -32001, "Unauthorized — invalid or revoked token");
+
+  if (method === "initialize") {
+    return rpcResult(id, {
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: { tools: {} },
+      serverInfo: { name: "prd-studio-connector", version: "1.0.0" },
+    });
+  }
 
   if (method === "tools/list" || method === "list_tools") {
     return rpcResult(id, { tools: TOOLS });

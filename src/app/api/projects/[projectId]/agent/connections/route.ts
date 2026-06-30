@@ -80,6 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       mcpConfigSample: {
         mcpServers: {
           "prd-studio-connector": {
+            type: "http",
             url: mcpUrl,
             headers: { Authorization: `Bearer ${plainTextToken}` },
           },
