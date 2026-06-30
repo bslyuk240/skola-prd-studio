@@ -40,10 +40,14 @@ interface SidebarProps {
   projectName?: string;
 }
 
-export function Sidebar({ projectId, projectName }: SidebarProps) {
+export function Sidebar({ projectId: projectIdProp, projectName }: SidebarProps) {
   const pathname = usePathname();
   const { signOut } = useClerk();
   const { user } = useUser();
+
+  // Sidebar is rendered once in the root layout with no props, so derive the
+  // active project from the URL instead of requiring every page to pass it.
+  const projectId = projectIdProp ?? pathname.match(/^\/projects\/([^/]+)/)?.[1];
 
   return (
     <aside className="w-60 shrink-0 flex flex-col h-full bg-sidebar border-r border-sidebar-border">
