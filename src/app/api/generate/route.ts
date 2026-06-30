@@ -15,6 +15,28 @@ const schema = z.object({
   documentType: z.enum(["prd", "trd", "app_flow", "ux_brief", "backend_schema", "implementation_plan", "security_blueprint"]),
 });
 
+// Fire the background function and bail out fast if it doesn't respond —
+// a hung call here would otherwise eat the whole sync-function time budget
+// before falling back to inline generation, guaranteeing a 504 either way.
+async function triggerBackground(url: string, payload: object): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("[generate] background dispatch failed:", err instanceof Error ? err.message : err);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,18 +65,16 @@ export async function POST(req: NextRequest) {
   // Hand off to a Netlify Background Function (15 min limit) so generation
   // isn't bound by the ~10-26s sync function timeout. Falls back to running
   // inline below when no background function is reachable (e.g. local dev
-  // without `netlify dev`).
-  try {
-    const bgRes = await fetch(`${req.nextUrl.origin}/.netlify/functions/generate-background`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, documentType, userId }),
-    });
-    if (bgRes.ok || bgRes.status === 202) {
-      return NextResponse.json({ status: "generating" }, { status: 202 });
-    }
-  } catch {
-    // Background function unreachable — fall through to inline generation.
+  // without `netlify dev`). Use Netlify's own canonical site URL rather than
+  // req.nextUrl.origin, which can resolve to an internal/edge address.
+  const siteUrl = process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
+  const dispatched = await triggerBackground(`${siteUrl}/.netlify/functions/generate-background`, {
+    projectId,
+    documentType,
+    userId,
+  });
+  if (dispatched) {
+    return NextResponse.json({ status: "generating" }, { status: 202 });
   }
 
   try {
