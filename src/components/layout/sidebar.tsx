@@ -31,7 +31,7 @@ const projectItems = [
   { icon: FileText, label: "Documents", segment: "documents" },
   { icon: Shield, label: "Security Center", segment: "security" },
   { icon: CheckSquare, label: "Build Tasks", segment: "tasks" },
-  { icon: Bot, label: "Agent Progress", segment: "agent" },
+  { icon: Bot, label: "Agent Handoff", segment: "agent" },
   { icon: Download, label: "Export", segment: "export" },
 ];
 

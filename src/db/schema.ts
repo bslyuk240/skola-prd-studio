@@ -77,6 +77,30 @@ export const agentTypeEnum = pgEnum("agent_type", [
   "other",
 ]);
 
+export const agentConnectionStatusEnum = pgEnum("agent_connection_status", [
+  "active",
+  "revoked",
+]);
+
+export const agentSessionStatusEnum = pgEnum("agent_session_status", [
+  "active",
+  "completed",
+  "terminated",
+]);
+
+export const agentEventTypeEnum = pgEnum("agent_event_type", [
+  "task_claimed",
+  "task_started",
+  "progress_update",
+  "files_changed",
+  "tests_passed",
+  "tests_failed",
+  "blocked",
+  "completed",
+  "needs_review",
+  "question_asked",
+]);
+
 // ─── Tables ───────────────────────────────────────────────────────────────────
 
 export const projects = pgTable("projects", {
@@ -160,8 +184,27 @@ export const buildTasks = pgTable("build_tasks", {
   filesAffected: jsonb("files_affected"),
   agentStatus: text("agent_status"),
   notes: text("notes"),
+  // IDE Agent Connector
+  isApprovedForAgent: boolean("is_approved_for_agent").default(false).notNull(),
+  assignedConnectionId: uuid("assigned_connection_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─── IDE Agent Connector (MCP) ─────────────────────────────────────────────────
+
+export const agentConnections = pgTable("agent_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  agentType: agentTypeEnum("agent_type").default("other").notNull(),
+  connectionName: text("connection_name").notNull(),
+  status: agentConnectionStatusEnum("status").default("active").notNull(),
+  tokenHash: text("token_hash").unique().notNull(), // SHA-256 hash of the issued bearer token
+  scopes: jsonb("scopes").default(["read:context", "write:progress"]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at"),
 });
 
 export const agentSessions = pgTable("agent_sessions", {
@@ -170,24 +213,49 @@ export const agentSessions = pgTable("agent_sessions", {
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   agentType: agentTypeEnum("agent_type").notNull(),
+  agentConnectionId: uuid("agent_connection_id")
+    .references(() => agentConnections.id, { onDelete: "cascade" }),
+  status: agentSessionStatusEnum("status").default("active").notNull(),
   connectionStatus: text("connection_status").default("disconnected"),
   currentTaskId: uuid("current_task_id"),
-  startedAt: timestamp("started_at"),
+  startedAt: timestamp("started_at").defaultNow(),
   endedAt: timestamp("ended_at"),
 });
 
 export const agentLogs = pgTable("agent_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" }),
   agentSessionId: uuid("agent_session_id")
-    .notNull()
-    .references(() => agentSessions.id, { onDelete: "cascade" }),
+    .references(() => agentSessions.id, { onDelete: "cascade" }), // null for human-only events (e.g. review decisions)
   taskId: uuid("task_id"),
+  eventType: agentEventTypeEnum("event_type").notNull(),
   message: text("message"),
   status: text("status"),
   filesChanged: jsonb("files_changed"),
   testResult: jsonb("test_result"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const agentQuestions = pgTable("agent_questions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  taskId: uuid("task_id").notNull(),
+  agentSessionId: uuid("agent_session_id")
+    .references(() => agentSessions.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  status: text("status").default("pending").notNull(), // pending | answered
+  answer: text("answer"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  answeredAt: timestamp("answered_at"),
+});
+
+export type AgentConnection = typeof agentConnections.$inferSelect;
+export type AgentSession = typeof agentSessions.$inferSelect;
+export type AgentLog = typeof agentLogs.$inferSelect;
+export type AgentQuestion = typeof agentQuestions.$inferSelect;
 
 export const exports = pgTable("exports", {
   id: uuid("id").defaultRandom().primaryKey(),

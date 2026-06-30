@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import type { Project, BuildTask } from "@/db/schema";
+import type { Project, BuildTask, AgentLog, AgentQuestion } from "@/db/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Wand2, Loader2, ClipboardList } from "lucide-react";
+import { ArrowLeft, Wand2, Loader2, ClipboardList, Copy, CheckCircle2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const COLUMNS = [
@@ -30,12 +29,15 @@ const PRIORITY_CONFIG = {
 interface Props {
   project: Project;
   tasks: BuildTask[];
+  reportsByTask: Record<string, AgentLog>;
+  questionsByTask: Record<string, AgentQuestion[]>;
 }
 
-export function TasksBoardClient({ project, tasks: initialTasks }: Props) {
+export function TasksBoardClient({ project, tasks: initialTasks, reportsByTask, questionsByTask }: Props) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [generating, setGenerating] = useState(false);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
 
   async function generateTasks() {
     setGenerating(true);
@@ -58,6 +60,54 @@ export function TasksBoardClient({ project, tasks: initialTasks }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+  }
+
+  async function approveForAgent(taskId: string) {
+    setBusyTaskId(taskId);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}/handoff`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, isApprovedForAgent: true, status: t.status === "backlog" ? "ready" : t.status } : t)));
+      toast.success("Task approved for agent handoff.");
+    } catch {
+      toast.error("Failed to approve task.");
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
+  async function copyTaskPacket(taskId: string) {
+    setBusyTaskId(taskId);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}/handoff`);
+      if (!res.ok) throw new Error();
+      const packet = await res.json();
+      await navigator.clipboard.writeText(packet.formattedManualPrompt);
+      toast.success("Task packet copied — paste into your IDE agent.");
+    } catch {
+      toast.error("Failed to build task packet.");
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
+  async function reviewTask(taskId: string, decision: "approved" | "reject_revision") {
+    setBusyTaskId(taskId);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: data.newStatus } : t)));
+      toast.success(decision === "approved" ? "Task approved and marked Done." : "Sent back to In Progress.");
+    } catch {
+      toast.error("Failed to record review decision.");
+    } finally {
+      setBusyTaskId(null);
+    }
   }
 
   const byStatus = (status: string) => tasks.filter((t) => t.status === status);
@@ -118,7 +168,17 @@ export function TasksBoardClient({ project, tasks: initialTasks }: Props) {
                 </div>
                 <div className="flex flex-col gap-2">
                   {colTasks.map((task) => (
-                    <TaskCard key={task.id} task={task} onStatusChange={updateStatus} />
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      report={reportsByTask[task.id]}
+                      questions={questionsByTask[task.id] ?? []}
+                      busy={busyTaskId === task.id}
+                      onStatusChange={updateStatus}
+                      onApproveForAgent={approveForAgent}
+                      onCopyPacket={copyTaskPacket}
+                      onReview={reviewTask}
+                    />
                   ))}
                 </div>
               </div>
@@ -130,8 +190,22 @@ export function TasksBoardClient({ project, tasks: initialTasks }: Props) {
   );
 }
 
-function TaskCard({ task, onStatusChange }: { task: BuildTask; onStatusChange: (id: string, status: string) => void }) {
+interface TaskCardProps {
+  task: BuildTask;
+  report?: AgentLog;
+  questions: AgentQuestion[];
+  busy: boolean;
+  onStatusChange: (id: string, status: string) => void;
+  onApproveForAgent: (id: string) => void;
+  onCopyPacket: (id: string) => void;
+  onReview: (id: string, decision: "approved" | "reject_revision") => void;
+}
+
+function TaskCard({ task, report, questions, busy, onStatusChange, onApproveForAgent, onCopyPacket, onReview }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority ?? "medium"];
+  const filesChanged = (report?.filesChanged as { filePath: string; riskLevel: string }[] | null) ?? [];
+  const testResults = (report?.testResult as { command: string; status: string }[] | null) ?? [];
+  const openQuestions = questions.filter((q) => q.status === "pending");
 
   return (
     <div className="bg-card border border-border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
@@ -141,21 +215,69 @@ function TaskCard({ task, onStatusChange }: { task: BuildTask; onStatusChange: (
         <Badge variant="outline" className={cn("text-xs py-0", priorityCfg.className)}>
           {priorityCfg.label}
         </Badge>
+        {task.isApprovedForAgent && (
+          <Badge variant="outline" className="text-xs py-0 text-primary border-primary/30 bg-primary/5">
+            Approved for Agent
+          </Badge>
+        )}
+        {openQuestions.length > 0 && (
+          <Badge variant="outline" className="text-xs py-0 text-amber-600 border-amber-200 bg-amber-50">
+            {openQuestions.length} question{openQuestions.length > 1 ? "s" : ""}
+          </Badge>
+        )}
       </div>
       {task.estimatedEffort && (
         <p className="text-xs text-muted-foreground mb-2">{task.estimatedEffort}</p>
       )}
-      <div className="flex gap-2 flex-wrap">
-        {task.status !== "in_progress" && (
-          <button onClick={() => onStatusChange(task.id, "in_progress")} className="text-xs text-amber-600 hover:underline">Start</button>
+
+      {/* Agent report — only on tasks awaiting human review */}
+      {task.status === "review" && report && (
+        <div className="bg-muted/60 rounded-md p-2 mb-2 space-y-1.5">
+          <p className="text-xs text-foreground leading-relaxed line-clamp-3">{report.message}</p>
+          {filesChanged.length > 0 && (
+            <p className="text-xs text-muted-foreground">{filesChanged.length} file{filesChanged.length > 1 ? "s" : ""} changed</p>
+          )}
+          {testResults.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Tests: {testResults.filter((t) => t.status === "passed").length}/{testResults.length} passed
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap mb-1.5">
+        {(task.status === "backlog" || task.status === "ready") && !task.isApprovedForAgent && (
+          <button onClick={() => onApproveForAgent(task.id)} disabled={busy} className="text-xs text-primary hover:underline disabled:opacity-50">
+            Approve for Agent
+          </button>
         )}
-        {task.status !== "done" && (
-          <button onClick={() => onStatusChange(task.id, "done")} className="text-xs text-emerald-600 hover:underline">Done</button>
-        )}
-        {task.status !== "blocked" && (
-          <button onClick={() => onStatusChange(task.id, "blocked")} className="text-xs text-red-500 hover:underline">Block</button>
-        )}
+        <button onClick={() => onCopyPacket(task.id)} disabled={busy} className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50 inline-flex items-center gap-1">
+          <Copy className="w-3 h-3" /> Copy Task Packet
+        </button>
       </div>
+
+      {task.status === "review" ? (
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => onReview(task.id, "approved")} disabled={busy} className="text-xs text-emerald-600 hover:underline disabled:opacity-50 inline-flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Approve & Done
+          </button>
+          <button onClick={() => onReview(task.id, "reject_revision")} disabled={busy} className="text-xs text-amber-600 hover:underline disabled:opacity-50 inline-flex items-center gap-1">
+            <Undo2 className="w-3 h-3" /> Send Back
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2 flex-wrap">
+          {task.status !== "in_progress" && (
+            <button onClick={() => onStatusChange(task.id, "in_progress")} className="text-xs text-amber-600 hover:underline">Start</button>
+          )}
+          {task.status !== "done" && (
+            <button onClick={() => onStatusChange(task.id, "done")} className="text-xs text-emerald-600 hover:underline">Done</button>
+          )}
+          {task.status !== "blocked" && (
+            <button onClick={() => onStatusChange(task.id, "blocked")} className="text-xs text-red-500 hover:underline">Block</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
