@@ -74,6 +74,18 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
   const readyDocs = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const progress = Math.round((readyDocs / 9) * 100);
 
+  async function pollDocStatus(docType: string): Promise<"ready" | "pending" | "timeout"> {
+    for (let i = 0; i < 80; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const res = await fetch(`/api/feature/generate/status?featureRequestId=${request.id}&documentType=${docType}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.status === "ready") return "ready";
+      if (data.status === "pending") return "pending";
+    }
+    return "timeout";
+  }
+
   async function generateDoc(docType: string) {
     setGenerating((p) => ({ ...p, [docType]: true }));
     try {
@@ -86,6 +98,16 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
         const err = await res.json();
         throw new Error(err.detail ?? "Generation failed");
       }
+
+      if (res.status === 202) {
+        const result = await pollDocStatus(docType);
+        if (result === "pending") throw new Error("Generation failed");
+        if (result === "timeout") {
+          toast.error("Still generating — check back in a moment.");
+          return;
+        }
+      }
+
       toast.success("Document generated!");
       router.refresh();
     } catch (err) {
@@ -99,9 +121,7 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
     const pending = documents.filter((d) => d.status === "pending").map((d) => d.type);
     if (!pending.length) { toast.info("All documents are already generated."); return; }
     toast.info(`Generating ${pending.length} documents…`);
-    for (const type of pending) {
-      await generateDoc(type);
-    }
+    await Promise.all(pending.map((type) => generateDoc(type)));
   }
 
   const stack = repoConnection?.detectedStack as Record<string, string> | null;

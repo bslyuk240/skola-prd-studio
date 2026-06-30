@@ -45,6 +45,18 @@ export function DocumentsClient({ project, documents }: Props) {
   const ready = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const readinessScore = Math.round((ready / 7) * 100);
 
+  async function pollDocStatus(docType: string): Promise<"ready" | "pending" | "timeout"> {
+    for (let i = 0; i < 80; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const res = await fetch(`/api/generate/status?projectId=${project.id}&documentType=${docType}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.status === "ready") return "ready";
+      if (data.status === "pending") return "pending";
+    }
+    return "timeout";
+  }
+
   async function generateDoc(docType: string) {
     setGenerating((p) => ({ ...p, [docType]: true }));
     try {
@@ -54,6 +66,16 @@ export function DocumentsClient({ project, documents }: Props) {
         body: JSON.stringify({ projectId: project.id, documentType: docType }),
       });
       if (!res.ok) throw new Error();
+
+      if (res.status === 202) {
+        const result = await pollDocStatus(docType);
+        if (result === "pending") throw new Error();
+        if (result === "timeout") {
+          toast.error("Still generating — check back in a moment.");
+          return;
+        }
+      }
+
       toast.success("Document generated successfully!");
       router.refresh();
     } catch {
@@ -67,9 +89,7 @@ export function DocumentsClient({ project, documents }: Props) {
     const pending = documents.filter((d) => d.status === "pending").map((d) => d.type);
     if (pending.length === 0) return toast.info("All documents are already generated.");
     toast.info(`Generating ${pending.length} documents…`);
-    for (const type of pending) {
-      await generateDoc(type);
-    }
+    await Promise.all(pending.map((type) => generateDoc(type)));
   }
 
   return (

@@ -47,6 +47,23 @@ export async function POST(req: NextRequest) {
     .set({ status: "generating", updatedAt: new Date() })
     .where(and(eq(featureDocuments.featureRequestId, featureRequestId), eq(featureDocuments.type, documentType)));
 
+  // Hand off to a Netlify Background Function (15 min limit) so generation
+  // isn't bound by the ~10-26s sync function timeout. Falls back to running
+  // inline below when no background function is reachable (e.g. local dev
+  // without `netlify dev`).
+  try {
+    const bgRes = await fetch(`${req.nextUrl.origin}/.netlify/functions/feature-generate-background`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ featureRequestId, documentType, userId }),
+    });
+    if (bgRes.ok || bgRes.status === 202) {
+      return NextResponse.json({ status: "generating" }, { status: 202 });
+    }
+  } catch {
+    // Background function unreachable — fall through to inline generation.
+  }
+
   try {
     // Load repo connection context
     let repoConn = null;
