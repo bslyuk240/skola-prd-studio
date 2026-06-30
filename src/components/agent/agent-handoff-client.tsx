@@ -302,7 +302,7 @@ export function AgentHandoffClient({ project, tasks, connections: initialConnect
 
       {/* New connection dialog */}
       <Dialog open={showNewForm} onOpenChange={setShowNewForm}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New Agent Connection</DialogTitle>
             <DialogDescription>Generates a scoped API token your IDE agent uses to connect to this project.</DialogDescription>
@@ -344,7 +344,7 @@ export function AgentHandoffClient({ project, tasks, connections: initialConnect
 
       {/* Token reveal — shown once */}
       <Dialog open={!!newToken} onOpenChange={(open) => !open && setNewToken(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Connection Created
@@ -354,29 +354,31 @@ export function AgentHandoffClient({ project, tasks, connections: initialConnect
             </DialogDescription>
           </DialogHeader>
           {newToken && (
-            <div className="space-y-3">
-              <div>
+            <div className="space-y-3 min-w-0">
+              <div className="min-w-0">
                 <Label className="text-xs">API Token</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="flex-1 bg-muted rounded-lg px-3 py-2 text-xs font-mono break-all">{newToken.plainTextToken}</code>
+                <div className="flex items-center gap-2 mt-1 min-w-0">
+                  <code className="flex-1 min-w-0 bg-muted rounded-lg px-3 py-2 text-xs font-mono break-all">{newToken.plainTextToken}</code>
                   <Button
                     size="sm"
                     variant="outline"
+                    className="shrink-0"
                     onClick={() => { navigator.clipboard.writeText(newToken.plainTextToken); toast.success("Token copied!"); }}
                   >
                     <Copy className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label className="text-xs">MCP Config (mcp.json)</Label>
-                <div className="flex items-start gap-2 mt-1">
-                  <pre className="flex-1 bg-muted rounded-lg px-3 py-2 text-xs font-mono overflow-x-auto">
+                <div className="flex items-start gap-2 mt-1 min-w-0">
+                  <pre className="flex-1 min-w-0 bg-muted rounded-lg px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
                     {JSON.stringify(newToken.mcpConfigSample, null, 2)}
                   </pre>
                   <Button
                     size="sm"
                     variant="outline"
+                    className="shrink-0"
                     onClick={() => { navigator.clipboard.writeText(JSON.stringify(newToken.mcpConfigSample, null, 2)); toast.success("Config copied!"); }}
                   >
                     <Copy className="w-3.5 h-3.5" />
