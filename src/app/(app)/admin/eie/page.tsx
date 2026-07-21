@@ -7,8 +7,8 @@ import {
 } from "@/db/schema";
 import { desc, sql } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { RecentSourcesList } from "@/components/eie/recent-sources-list";
 
 export default async function EieCommandCenterPage() {
   const [sourceCounts, draftCounts, publishedCount, recentSources] = await Promise.all([
@@ -68,28 +68,17 @@ export default async function EieCommandCenterPage() {
           <CardTitle className="text-sm font-semibold">Recent ingestions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {recentSources.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No ingestion transactions exist. Add a source to begin processing.
-            </p>
-          ) : (
-            recentSources.map((source) => (
-              <div
-                key={source.id}
-                className="flex items-center justify-between gap-4 rounded-lg border border-border p-3"
-              >
-                <div>
-                  <p className="text-sm font-semibold">{source.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {source.sourceType.replace(/_/g, " ")}
-                  </p>
-                </div>
-                <Badge variant="outline" className="capitalize">
-                  {source.status}
-                </Badge>
-              </div>
-            ))
-          )}
+          <RecentSourcesList
+            sources={recentSources.map((source) => ({
+              id: source.id,
+              name: source.name,
+              sourceType: source.sourceType,
+              status: source.status,
+              errorMessage: source.errorMessage,
+              sourceUrl: source.sourceUrl,
+              metadata: source.metadata,
+            }))}
+          />
         </CardContent>
       </Card>
     </div>

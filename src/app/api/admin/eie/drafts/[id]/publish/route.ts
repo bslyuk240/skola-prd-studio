@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { db } from "@/db";
 import {
   eieConceptRelationships,
+  eieKnowledgeSources,
   eiePublishedKnowledge,
   eieSynthesisDrafts,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireAdmin, isAuthFailure } from "@/lib/eie/auth";
 import { eieError, eieOk, eieValidationError } from "@/lib/eie/api-response";
 import { publishDraftSchema } from "@/lib/zod/eie-schemas";
@@ -13,6 +14,7 @@ import {
   buildEmbeddingInput,
   generateEmbedding,
 } from "@/lib/eie/embeddings";
+import { EieCreditAccumulator } from "@/lib/eie/ai-credits";
 import { ensureUniqueSlug, slugifyConceptName } from "@/lib/eie/mappers";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -53,6 +55,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   });
 
   let embedding: number[] | null = null;
+  const publishCredits = new EieCreditAccumulator();
   try {
     embedding = await generateEmbedding(
       buildEmbeddingInput({
@@ -61,10 +64,21 @@ export async function POST(req: NextRequest, context: RouteContext) {
         summary: draft.summary,
         practicalExplanation: draft.practicalExplanation,
         tags: draft.tags,
-      })
+      }),
+      publishCredits
     );
   } catch (error) {
     console.error("[eie] embedding generation failed:", error);
+  }
+
+  if (draft.sourceId && publishCredits.getTotal() > 0) {
+    await db
+      .update(eieKnowledgeSources)
+      .set({
+        aiCreditsUsed: sql`${eieKnowledgeSources.aiCreditsUsed} + ${publishCredits.getTotal()}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(eieKnowledgeSources.id, draft.sourceId));
   }
 
   const [published] = await db

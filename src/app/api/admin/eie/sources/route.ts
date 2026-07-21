@@ -11,6 +11,12 @@ import {
   sourceListQuerySchema,
 } from "@/lib/zod/eie-schemas";
 import { queueSourceProcessing } from "@/lib/eie/orchestrator";
+import { setSourceProcessingStage } from "@/lib/eie/processing-stage-store";
+import {
+  assertFileKeyOwnedByUser,
+  storedObjectExists,
+} from "@/lib/eie/storage";
+import { isGitHubUrl, isVideoUrl } from "@/lib/eie/url-patterns";
 
 const ALLOWED_INGEST_MIME_TYPES = new Set([
   "application/pdf",
@@ -70,9 +76,46 @@ export async function POST(req: NextRequest) {
         [{ field: "sourceUrl", message: "URL is not allowed" }]
       );
     }
+
+    const documentUrlTypes = new Set([
+      "official_doc",
+      "markdown_file",
+      "research_paper",
+      "pdf",
+      "book",
+    ]);
+    if (documentUrlTypes.has(input.sourceType)) {
+      if (isVideoUrl(input.sourceUrl)) {
+        return eieError(
+          "VALIDATION_ERROR",
+          "Use the Video URL ingest type for video links",
+          400,
+          [{ field: "sourceUrl", message: "URL is a video link" }]
+        );
+      }
+      if (isGitHubUrl(input.sourceUrl)) {
+        return eieError(
+          "VALIDATION_ERROR",
+          "Use the GitHub Repo ingest type for repository links",
+          400,
+          [{ field: "sourceUrl", message: "URL is a GitHub repository link" }]
+        );
+      }
+    }
   }
 
   if ("fileKey" in input) {
+    try {
+      assertFileKeyOwnedByUser(input.fileKey, auth.userId);
+    } catch (error) {
+      return eieError(
+        "VALIDATION_ERROR",
+        error instanceof Error ? error.message : "Invalid file key",
+        400,
+        [{ field: "fileKey", message: "Invalid file key" }]
+      );
+    }
+
     const mimeType = input.metadata?.mimeType;
     if (!mimeType || !ALLOWED_INGEST_MIME_TYPES.has(mimeType)) {
       return eieError("VALIDATION_ERROR", "File type not allowed", 400, [
@@ -84,6 +127,16 @@ export async function POST(req: NextRequest) {
       return eieError("VALIDATION_ERROR", "Executable files are not allowed", 400, [
         { field: "fileKey", message: "Executable files are not allowed" },
       ]);
+    }
+
+    const exists = await storedObjectExists(input.fileKey);
+    if (!exists) {
+      return eieError(
+        "VALIDATION_ERROR",
+        "Uploaded file was not found in storage. Upload the file before ingesting.",
+        400,
+        [{ field: "fileKey", message: "File not found in storage" }]
+      );
     }
   }
 
@@ -104,6 +157,8 @@ export async function POST(req: NextRequest) {
     .returning();
 
   const dispatch = await queueSourceProcessing(source.id);
+
+  await setSourceProcessingStage(source.id, "queued");
 
   return eieOk({ ...source, processing: dispatch }, 201);
 }

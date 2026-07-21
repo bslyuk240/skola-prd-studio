@@ -1,7 +1,20 @@
 import type { EieSourceType } from "@/lib/eie/constants";
+import {
+  GITHUB_URL_PATTERN,
+  MARKDOWN_URL_PATTERN,
+  PDF_URL_PATTERN,
+  VIDEO_URL_PATTERN,
+} from "@/lib/eie/url-patterns";
 
-const VIDEO_URL_PATTERN = /(youtube\.com|youtu\.be|vimeo\.com|tiktok\.com)/i;
-const GITHUB_URL_PATTERN = /github\.com/i;
+export {
+  classifyIngestUrl,
+  detectVideoPlatform,
+  extractYouTubeVideoId,
+  isGitHubUrl,
+  isVideoUrl,
+  VIDEO_URL_PATTERN,
+  GITHUB_URL_PATTERN,
+} from "@/lib/eie/url-patterns";
 
 const EXTENSION_MAP: Record<string, EieSourceType> = {
   pdf: "pdf",
@@ -17,17 +30,22 @@ const EXTENSION_MAP: Record<string, EieSourceType> = {
 export function detectSourceTypeFromUrl(url: string): EieSourceType | null {
   try {
     const parsed = new URL(url);
-    if (VIDEO_URL_PATTERN.test(parsed.hostname + parsed.pathname)) {
+    const hostPath = `${parsed.hostname}${parsed.pathname}`;
+
+    if (VIDEO_URL_PATTERN.test(hostPath)) {
       return "video_url";
     }
     if (GITHUB_URL_PATTERN.test(parsed.hostname)) {
       return "github_repo";
     }
-    if (/\.pdf(\?|#|$)/i.test(parsed.pathname)) {
+    if (PDF_URL_PATTERN.test(parsed.pathname)) {
       return "pdf";
     }
-    if (/\.(md|markdown)(\?|#|$)/i.test(parsed.pathname)) {
+    if (MARKDOWN_URL_PATTERN.test(parsed.pathname)) {
       return "markdown_file";
+    }
+    if (/arxiv\.org|doi\.org|researchgate\.net/i.test(hostPath)) {
+      return "research_paper";
     }
     return "official_doc";
   } catch {

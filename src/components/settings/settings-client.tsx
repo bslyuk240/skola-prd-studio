@@ -8,7 +8,7 @@ import {
   User, Bot, Shield, Palette, Zap,
   Check,
   Loader2,
-  FileText, GitBranch,
+  FileText, GitBranch, BookOpen,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -95,10 +95,11 @@ interface UsageDetail {
   limit: number;
   remaining: number;
   percentage: number;
-  breakdown: { blueprintCredits: number; featureCredits: number; securityCredits: number };
+  breakdown: { blueprintCredits: number; featureCredits: number; securityCredits: number; eieCredits: number };
   blueprintDocs: { id: string; type: string; projectName: string; wordCount: number | null; aiCreditsUsed: number | null }[];
   featureDocs: { id: string; type: string; featureName: string; wordCount: number | null; aiCreditsUsed: number | null }[];
   scans: { id: string; provider: string; repoOwner: string | null; repoName: string | null; safeToShipScore: number | null; aiCreditsUsed: number | null }[];
+  eieSources: { id: string; name: string; sourceType: string; status: string; aiCreditsUsed: number | null; updatedAt: string }[];
 }
 
 function UsageTabContent() {
@@ -125,7 +126,7 @@ function UsageTabContent() {
 
   if (!data) return <p className="text-sm text-muted-foreground">Failed to load usage data.</p>;
 
-  const { totalConsumed, limit, remaining, percentage, breakdown, blueprintDocs, featureDocs, scans } = data;
+  const { totalConsumed, limit, remaining, percentage, breakdown, blueprintDocs, featureDocs, scans, eieSources } = data;
   const isWarning = percentage >= 70;
   const isCritical = percentage >= 90;
 
@@ -155,11 +156,12 @@ function UsageTabContent() {
       </Card>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           { label: "Blueprint Docs", value: breakdown.blueprintCredits, icon: FileText },
           { label: "Feature Docs", value: breakdown.featureCredits, icon: GitBranch },
           { label: "Security Scans", value: breakdown.securityCredits, icon: Shield },
+          { label: "EIE Ingestion", value: breakdown.eieCredits, icon: BookOpen },
         ].map(({ label, value, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="p-5">
@@ -183,6 +185,7 @@ function UsageTabContent() {
                 { label: "Blueprint Documents", value: breakdown.blueprintCredits, color: "bg-blue-500" },
                 { label: "Feature Documents", value: breakdown.featureCredits, color: "bg-emerald-500" },
                 { label: "Security Scans", value: breakdown.securityCredits, color: "bg-red-500" },
+                { label: "EIE Ingestion", value: breakdown.eieCredits, color: "bg-primary" },
               ].map(({ label, value, color }) => (
                 <div key={label}>
                   <div className="flex justify-between text-xs mb-1">
@@ -287,13 +290,40 @@ function UsageTabContent() {
         </Card>
       )}
 
+      {eieSources.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" /> EIE Source Ingestions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4">
+            <div className="space-y-2">
+              {eieSources.map((source) => (
+                <div key={source.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{source.name}</p>
+                    <p className="text-xs capitalize text-muted-foreground">
+                      {source.sourceType.replace(/_/g, " ")} · {source.status}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-foreground shrink-0">
+                    {source.aiCreditsUsed} credits
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {totalConsumed === 0 && (
         <Card className="border-dashed">
           <CardContent className="p-12 text-center">
             <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
             <h3 className="font-semibold text-foreground mb-1">No usage yet</h3>
             <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              Generate blueprint documents, feature plans, or run a security scan to see credit consumption here.
+              Generate blueprint documents, feature plans, run security scans, or ingest EIE sources to see credit consumption here.
             </p>
           </CardContent>
         </Card>

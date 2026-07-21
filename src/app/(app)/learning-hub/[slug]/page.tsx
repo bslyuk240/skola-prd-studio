@@ -8,12 +8,21 @@ import { formatEieCategory } from "@/lib/eie/constants";
 import { incrementPublishedViews } from "@/lib/eie/search";
 import { ConceptCard } from "@/components/eie/concept-card";
 
+import { formatTradeOffLine } from "@/lib/eie/format-synthesis-fields";
+
 type PageProps = { params: Promise<{ slug: string }> };
 
 function asLines(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
+  if (Array.isArray(value)) {
+    return value.map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
+  }
   if (typeof value === "string") return [value];
   return [];
+}
+
+function asTradeOffLines(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(formatTradeOffLine);
 }
 
 export default async function LearningHubConceptPage({ params }: PageProps) {
@@ -57,7 +66,7 @@ export default async function LearningHubConceptPage({ params }: PageProps) {
     { title: "Engineering Summary", content: concept.summary },
     { title: "Practical Explanation", content: concept.practicalExplanation },
     { title: "Best Practices", items: asLines(concept.bestPractices) },
-    { title: "Trade-offs", items: asLines(concept.tradeOffs) },
+    { title: "Trade-offs", items: asTradeOffLines(concept.tradeOffs) },
     { title: "Alternative Approaches", items: asLines(concept.alternativeApproaches) },
     { title: "Security Considerations", items: asLines(concept.securityConsiderations) },
     { title: "Common Mistakes", items: asLines(concept.commonMistakes) },

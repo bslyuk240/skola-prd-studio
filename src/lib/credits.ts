@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { projects, documents, featureRequests, featureDocuments, securityScans } from "@/db/schema";
+import { projects, documents, featureRequests, featureDocuments, securityScans, eieKnowledgeSources } from "@/db/schema";
 import { eq, inArray, sum } from "drizzle-orm";
 
 export const CREDIT_LIMIT = 1000;
@@ -26,6 +26,7 @@ export interface CreditStatus {
     blueprintDocs: number;
     featureDocs: number;
     securityScans: number;
+    eieIngestion: number;
   };
 }
 
@@ -73,7 +74,13 @@ export async function getUserCreditStatus(userId: string): Promise<CreditStatus>
     .where(eq(securityScans.userId, userId));
   const securityScansTotal = Number(scanRow?.total ?? 0);
 
-  const consumed = blueprintDocs + featureDocs + securityScansTotal;
+  const [eieRow] = await db
+    .select({ total: sum(eieKnowledgeSources.aiCreditsUsed) })
+    .from(eieKnowledgeSources)
+    .where(eq(eieKnowledgeSources.createdBy, userId));
+  const eieIngestion = Number(eieRow?.total ?? 0);
+
+  const consumed = blueprintDocs + featureDocs + securityScansTotal + eieIngestion;
   const remaining = Math.max(0, CREDIT_LIMIT - consumed);
   const percentage = Math.min(100, Math.round((consumed / CREDIT_LIMIT) * 100));
 
@@ -86,6 +93,7 @@ export async function getUserCreditStatus(userId: string): Promise<CreditStatus>
       blueprintDocs,
       featureDocs,
       securityScans: securityScansTotal,
+      eieIngestion,
     },
   };
 }

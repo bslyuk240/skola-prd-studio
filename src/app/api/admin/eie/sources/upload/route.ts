@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { requireAdmin, isAuthFailure } from "@/lib/eie/auth";
 import { eieError, eieOk, eieValidationError } from "@/lib/eie/api-response";
 import { checkRateLimit } from "@/lib/eie/rate-limit";
+import { createPresignedUploadUrl, isStorageConfigured } from "@/lib/eie/storage";
 import { z } from "zod";
 
 const uploadRequestSchema = z.object({
@@ -41,6 +42,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
   if (isAuthFailure(auth)) return auth;
 
+  if (!isStorageConfigured()) {
+    return eieError(
+      "STORAGE_NOT_CONFIGURED",
+      "File storage is not configured. Set all EIE_STORAGE_* environment variables.",
+      503
+    );
+  }
+
   const rate = checkRateLimit(`eie-ingest:${auth.userId}`, 10, 60_000);
   if (!rate.allowed) {
     return eieError(
@@ -71,17 +80,21 @@ export async function POST(req: NextRequest) {
   }
 
   const fileKey = `eie/uploads/${auth.userId}/${randomUUID()}/${filename}`;
-  const bucket = process.env.EIE_STORAGE_BUCKET;
-  const endpoint = process.env.EIE_STORAGE_ENDPOINT;
 
-  return eieOk({
-    fileKey,
-    fileSize,
-    mimeType,
-    uploadUrl: bucket && endpoint ? `${endpoint}/${bucket}/${fileKey}` : null,
-    message:
-      bucket && endpoint
-        ? "Use uploadUrl with storage credentials for direct upload"
-        : "Storage is not configured. Set EIE_STORAGE_BUCKET and EIE_STORAGE_ENDPOINT.",
-  });
+  try {
+    const uploadUrl = await createPresignedUploadUrl(fileKey, mimeType);
+    return eieOk({
+      fileKey,
+      fileSize,
+      mimeType,
+      uploadUrl,
+      expiresInSeconds: 900,
+    });
+  } catch (error) {
+    return eieError(
+      "STORAGE_ERROR",
+      error instanceof Error ? error.message : "Failed to create upload URL",
+      500
+    );
+  }
 }

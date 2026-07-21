@@ -1,8 +1,10 @@
-import { openrouter } from "@/lib/openrouter";
+import { openrouter, DEFAULT_MODEL } from "@/lib/openrouter";
 import { synthesisFieldsSchema, type SynthesisFields } from "@/lib/zod/eie-schemas";
 
-const EXTRACTION_MODEL =
-  process.env.EIE_EXTRACTION_MODEL ?? "google/gemini-2.0-flash-001";
+function resolveExtractionModel(): string {
+  const configured = process.env.EIE_EXTRACTION_MODEL ?? DEFAULT_MODEL;
+  return configured === "google/gemini-2.0-flash-001" ? DEFAULT_MODEL : configured;
+}
 
 function stripJsonFence(text: string): string {
   const trimmed = text.trim();
@@ -22,7 +24,7 @@ export async function extractConceptsFromText(
       : "";
 
   const completion = await openrouter.chat.completions.create({
-    model: EXTRACTION_MODEL,
+    model: resolveExtractionModel(),
     response_format: { type: "json_object" },
     messages: [
       {

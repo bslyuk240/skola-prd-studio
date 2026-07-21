@@ -6,16 +6,39 @@ export function parsePlainText(content: string): string {
 
 export function parseMarkdown(content: string): string {
   const normalized = parsePlainText(content);
-  // Preserve heading hierarchy as plain-text section markers for the LLM.
   return normalized.replace(/^(#{1,6})\s+(.+)$/gm, (_, hashes: string, title: string) => {
     const level = hashes.length;
     return `${"#".repeat(level)} ${title}`;
   });
 }
 
-export async function parsePdf(_buffer: Buffer): Promise<string> {
-  // PDF parsing requires a dedicated library (e.g. pdf-parse) in a later iteration.
-  throw new Error("PDF parsing is not yet configured. Install a PDF parser dependency.");
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function parsePdf(buffer: Buffer): Promise<string> {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    const text = result.text?.trim();
+    if (!text || text.length < 20) {
+      throw new Error("PDF did not contain enough extractable text");
+    }
+    return text;
+  } finally {
+    await parser.destroy();
+  }
 }
 
 export async function parseDocument(

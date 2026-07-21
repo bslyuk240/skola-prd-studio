@@ -1,9 +1,11 @@
 import type { SynthesisFields } from "@/lib/zod/eie-schemas";
+import type { DraftEnrichmentMetadata } from "@/lib/eie/types/enrichment";
 import type { NewEieSynthesisDraft } from "@/db/schema";
 
 export function synthesisToDraftInsert(
   fields: SynthesisFields,
-  sourceId: string | null
+  sourceId: string | null,
+  metadata: DraftEnrichmentMetadata = {}
 ): Omit<NewEieSynthesisDraft, "id" | "createdAt" | "updatedAt" | "status"> {
   return {
     sourceId,
@@ -19,6 +21,7 @@ export function synthesisToDraftInsert(
     commonMistakes: fields.commonMistakes,
     implementationRecommendations: fields.implementationRecommendations,
     references: fields.references ?? [],
+    metadata,
   };
 }
 

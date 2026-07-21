@@ -11,6 +11,24 @@ describe("eie-schemas", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts Facebook video URL ingest payload", () => {
+    const parsed = ingestSourceSchema.safeParse({
+      sourceType: "video_url",
+      name: "Sign in lifecycle",
+      sourceUrl: "https://www.facebook.com/share/v/18x4J25z3u/",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accepts document URL ingest payload", () => {
+    const parsed = ingestSourceSchema.safeParse({
+      sourceType: "official_doc",
+      name: "Architecture guide",
+      sourceUrl: "https://example.com/docs/architecture",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it("rejects personal note below minimum length", () => {
     const parsed = ingestSourceSchema.safeParse({
       sourceType: "personal_note",

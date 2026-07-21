@@ -44,6 +44,21 @@ Copy `.env.example` to `.env.local` for local development. Set the same keys in 
 | `BACKGROUND_FUNCTION_SECRET` | Prod | HMAC auth for Netlify background generation |
 | `URL` or `DEPLOY_PRIME_URL` | Prod | QStash callback + background jobs |
 | `EIE_STORAGE_*` | No | File upload to R2/S3 |
+| `TAVILY_API_KEY` | Recommended | Authoritative doc search during EIE enrichment (primary) |
+| `SERPER_API_KEY` | Optional | Fallback authoritative doc search |
+
+EIE ingestion credits are stored on `eie_knowledge_sources.ai_credits_used` and included in the user's 1000-credit limit (Settings → Usage, sidebar widget).
+
+```bash
+npm run db:apply-eie-source-credits
+```
+
+```bash
+# Run on Neon if eie_synthesis_drafts.metadata is missing
+psql $DATABASE_URL -f docs/eie-migration-draft-metadata.sql
+```
+
+Without `TAVILY_API_KEY` or `SERPER_API_KEY`, enrichment falls back to LLM-suggested URLs from an allowlist of trusted public documentation domains.
 
 ## R2 / S3 bucket setup (manual)
 

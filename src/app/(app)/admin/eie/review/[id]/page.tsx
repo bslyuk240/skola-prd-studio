@@ -2,12 +2,11 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { eieKnowledgeSources, eieSynthesisDrafts } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  SynthesisComparisonView,
-  draftToFormState,
-} from "@/components/eie/synthesis-comparison-view";
+import { SynthesisComparisonView } from "@/components/eie/synthesis-comparison-view";
+import { AuthoritativeSourcesPanel } from "@/components/eie/authoritative-sources-panel";
 import { DraftReviewActions } from "@/components/eie/draft-review-actions";
 import { Badge } from "@/components/ui/badge";
+import { draftToFormState } from "@/lib/eie/draft-form-state";
 import { draftHasInjectionWarning } from "@/lib/eie/security/sanitize";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -52,6 +51,8 @@ export default async function EieReviewDetailPage({ params }: PageProps) {
       </div>
 
       <DraftReviewActions draftId={draft.id} conceptName={draft.conceptName} />
+
+      <AuthoritativeSourcesPanel metadata={draft.metadata} />
 
       <SynthesisComparisonView
         draftId={draft.id}

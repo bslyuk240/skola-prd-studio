@@ -4,6 +4,7 @@ import { eieKnowledgeSources, eieSynthesisDrafts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin, isAuthFailure } from "@/lib/eie/auth";
 import { eieError, eieOk } from "@/lib/eie/api-response";
+import { getSourceProcessingView } from "@/lib/eie/processing-stages";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -33,14 +34,19 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     .from(eieSynthesisDrafts)
     .where(eq(eieSynthesisDrafts.sourceId, id));
 
+  const processing = getSourceProcessingView(source.status, source.metadata);
+
   return eieOk({
     source,
     drafts,
     pipeline: {
-      isProcessing: source.status === "processing",
+      isProcessing: source.status === "processing" || source.status === "pending",
       isComplete: source.status === "success",
       isFailed: source.status === "failed",
       draftCount: drafts.length,
+      stage: processing?.stage ?? null,
+      stageLabel: processing?.label ?? null,
+      progress: processing?.progress ?? null,
     },
   });
 }

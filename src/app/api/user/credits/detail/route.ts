@@ -1,7 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { projects, documents, featureRequests, featureDocuments, securityScans } from "@/db/schema";
+import { projects, documents, featureRequests, featureDocuments, securityScans, eieKnowledgeSources } from "@/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
 import { CREDIT_LIMIT } from "@/lib/credits";
 
@@ -30,10 +30,17 @@ export async function GET() {
       .where(eq(securityScans.userId, userId))
       .orderBy(desc(securityScans.createdAt));
 
+    const allEieSources = await db
+      .select()
+      .from(eieKnowledgeSources)
+      .where(eq(eieKnowledgeSources.createdBy, userId))
+      .orderBy(desc(eieKnowledgeSources.updatedAt));
+
     const blueprintCredits = allDocs.reduce((s, d) => s + (d.aiCreditsUsed ?? 0), 0);
     const featureCredits = allFeatureDocs.reduce((s, d) => s + (d.aiCreditsUsed ?? 0), 0);
     const securityCredits = allScans.reduce((s, s2) => s + (s2.aiCreditsUsed ?? 0), 0);
-    const totalConsumed = blueprintCredits + featureCredits + securityCredits;
+    const eieCredits = allEieSources.reduce((s, source) => s + (source.aiCreditsUsed ?? 0), 0);
+    const totalConsumed = blueprintCredits + featureCredits + securityCredits + eieCredits;
     const percentage = Math.min(100, Math.round((totalConsumed / CREDIT_LIMIT) * 100));
     const remaining = Math.max(0, CREDIT_LIMIT - totalConsumed);
 
@@ -45,7 +52,7 @@ export async function GET() {
       limit: CREDIT_LIMIT,
       remaining,
       percentage,
-      breakdown: { blueprintCredits, featureCredits, securityCredits },
+      breakdown: { blueprintCredits, featureCredits, securityCredits, eieCredits },
       blueprintDocs: allDocs
         .filter((d) => (d.aiCreditsUsed ?? 0) > 0)
         .slice(0, 30)
@@ -75,6 +82,17 @@ export async function GET() {
           repoName: s.repoName,
           safeToShipScore: s.safeToShipScore,
           aiCreditsUsed: s.aiCreditsUsed,
+        })),
+      eieSources: allEieSources
+        .filter((source) => (source.aiCreditsUsed ?? 0) > 0)
+        .slice(0, 30)
+        .map((source) => ({
+          id: source.id,
+          name: source.name,
+          sourceType: source.sourceType,
+          status: source.status,
+          aiCreditsUsed: source.aiCreditsUsed,
+          updatedAt: source.updatedAt,
         })),
     });
   } catch {

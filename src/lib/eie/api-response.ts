@@ -12,6 +12,8 @@ export type EieErrorCode =
   | "RATE_LIMIT_EXCEEDED"
   | "MUTATION_VIOLATION"
   | "SLUG_CONFLICT"
+  | "STORAGE_NOT_CONFIGURED"
+  | "STORAGE_ERROR"
   | "INTERNAL_ERROR";
 
 type ErrorBody = {

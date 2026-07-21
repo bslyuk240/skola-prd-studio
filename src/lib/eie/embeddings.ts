@@ -1,10 +1,14 @@
 import { openrouter } from "@/lib/openrouter";
 import { EIE_EMBEDDING_DIMENSIONS } from "@/lib/eie/constants";
+import type { EieCreditAccumulator } from "@/lib/eie/ai-credits";
 
 const EMBEDDING_MODEL =
   process.env.EIE_EMBEDDING_MODEL ?? "openai/text-embedding-3-small";
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  credits?: EieCreditAccumulator
+): Promise<number[]> {
   const input = text.slice(0, 8000);
   const response = await openrouter.embeddings.create({
     model: EMBEDDING_MODEL,
@@ -21,6 +25,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       `Expected ${EIE_EMBEDDING_DIMENSIONS} dimensions, got ${vector.length}`
     );
   }
+
+  credits?.recordEmbedding();
 
   return vector;
 }

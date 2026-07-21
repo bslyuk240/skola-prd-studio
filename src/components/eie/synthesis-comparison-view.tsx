@@ -8,19 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EIE_CATEGORIES } from "@/lib/eie/constants";
+import type { DraftFormState } from "@/lib/eie/draft-form-state";
 
-export type DraftFormState = {
-  conceptName: string;
-  category: string;
-  summary: string;
-  practicalExplanation: string;
-  bestPractices: string;
-  tradeOffs: string;
-  alternativeApproaches: string;
-  securityConsiderations: string;
-  commonMistakes: string;
-  implementationRecommendations: string;
-};
+export type { DraftFormState };
 
 function linesToArray(text: string): string[] {
   return text
@@ -165,39 +155,4 @@ export function SynthesisComparisonView({
       </div>
     </div>
   );
-}
-
-export function draftToFormState(draft: {
-  conceptName: string;
-  category: string;
-  summary: string;
-  practicalExplanation: string;
-  bestPractices: unknown;
-  tradeOffs: unknown;
-  alternativeApproaches: unknown;
-  securityConsiderations: unknown;
-  commonMistakes: unknown;
-  implementationRecommendations: unknown;
-}): DraftFormState {
-  const asLines = (value: unknown) =>
-    Array.isArray(value) ? value.map(String).join("\n") : String(value ?? "");
-
-  return {
-    conceptName: draft.conceptName,
-    category: draft.category,
-    summary: draft.summary,
-    practicalExplanation: draft.practicalExplanation,
-    bestPractices: asLines(draft.bestPractices),
-    tradeOffs: asLines(draft.tradeOffs),
-    alternativeApproaches: asLines(draft.alternativeApproaches),
-    securityConsiderations: asLines(draft.securityConsiderations),
-    commonMistakes: asLines(draft.commonMistakes),
-    implementationRecommendations: asLines(
-      typeof draft.implementationRecommendations === "object" &&
-        draft.implementationRecommendations &&
-        "recommendations" in (draft.implementationRecommendations as object)
-        ? (draft.implementationRecommendations as { recommendations: string[] }).recommendations
-        : draft.implementationRecommendations
-    ),
-  };
 }

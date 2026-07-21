@@ -5,9 +5,10 @@ import {
   EIE_SOURCE_TYPES,
   EIE_SYNTHESIS_STATUSES,
 } from "@/lib/eie/constants";
+import { GITHUB_URL_PATTERN, VIDEO_URL_PATTERN } from "@/lib/eie/url-patterns";
 
-const videoUrlPattern = /(youtube\.com|youtu\.be|vimeo\.com|tiktok\.com)/i;
-const githubUrlPattern = /github\.com/i;
+const githubUrlPattern = GITHUB_URL_PATTERN;
+const videoUrlPattern = VIDEO_URL_PATTERN;
 
 export const eieSourceTypeSchema = z.enum(EIE_SOURCE_TYPES);
 export const eieSynthesisStatusSchema = z.enum(EIE_SYNTHESIS_STATUSES);
@@ -43,23 +44,37 @@ export const synthesisFieldsSchema = z.object({
   references: z.array(referenceSchema).default([]),
 });
 
-const fileBackedSourceTypes = z.enum([
-  "video_upload",
-  "pdf",
-  "book",
-  "official_doc",
-  "markdown_file",
-  "research_paper",
-]);
+const fileMetadataSchema = z
+  .object({
+    fileSize: z.number().int().positive().max(52_428_800),
+    mimeType: z.string().min(1),
+  })
+  .optional();
 
-export const ingestSourceSchema = z.discriminatedUnion("sourceType", [
+const urlDocumentBase = {
+  name: z.string().min(3).max(255),
+  sourceUrl: z.string().url(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+};
+
+const fileDocumentBase = {
+  name: z.string().min(3).max(255),
+  fileKey: z.string().min(1),
+  sourceUrl: z.string().url().optional(),
+  metadata: fileMetadataSchema,
+};
+
+export const ingestSourceSchema = z.union([
   z.object({
     sourceType: z.literal("video_url"),
     name: z.string().min(3).max(255),
     sourceUrl: z
       .string()
       .url()
-      .regex(videoUrlPattern, "URL must be YouTube, Vimeo, or TikTok"),
+      .regex(
+        videoUrlPattern,
+        "URL must be a supported video link (YouTube, Vimeo, TikTok, Facebook, or Instagram)"
+      ),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   z.object({
@@ -81,18 +96,17 @@ export const ingestSourceSchema = z.discriminatedUnion("sourceType", [
     content: z.string().min(20).max(100_000),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
-  z.object({
-    sourceType: fileBackedSourceTypes,
-    name: z.string().min(3).max(255),
-    fileKey: z.string().min(1),
-    sourceUrl: z.string().url().optional(),
-    metadata: z
-      .object({
-        fileSize: z.number().int().positive().max(52_428_800), // 50MB
-        mimeType: z.string().min(1),
-      })
-      .optional(),
-  }),
+  z.object({ sourceType: z.literal("official_doc"), ...urlDocumentBase }),
+  z.object({ sourceType: z.literal("markdown_file"), ...urlDocumentBase }),
+  z.object({ sourceType: z.literal("research_paper"), ...urlDocumentBase }),
+  z.object({ sourceType: z.literal("book"), ...urlDocumentBase }),
+  z.object({ sourceType: z.literal("pdf"), ...urlDocumentBase }),
+  z.object({ sourceType: z.literal("video_upload"), ...fileDocumentBase }),
+  z.object({ sourceType: z.literal("pdf"), ...fileDocumentBase }),
+  z.object({ sourceType: z.literal("book"), ...fileDocumentBase }),
+  z.object({ sourceType: z.literal("official_doc"), ...fileDocumentBase }),
+  z.object({ sourceType: z.literal("markdown_file"), ...fileDocumentBase }),
+  z.object({ sourceType: z.literal("research_paper"), ...fileDocumentBase }),
 ]);
 
 export const updateDraftSchema = synthesisFieldsSchema

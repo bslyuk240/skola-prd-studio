@@ -1,24 +1,16 @@
 import type { PublicKnowledgeConcept } from "@/lib/eie/public-serializer";
+import {
+  formatTradeOffLine,
+} from "@/lib/eie/format-synthesis-fields";
 
 function asStringList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) =>
-      typeof item === "string" ? item : JSON.stringify(item)
-    );
-  }
-  return [];
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
 }
 
 function asTradeOffs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.map((item) => {
-    if (typeof item === "string") return item;
-    if (item && typeof item === "object" && "alternative" in item) {
-      const t = item as { alternative: string; pro?: string; con?: string };
-      return `${t.alternative}: pro — ${t.pro ?? "n/a"}; con — ${t.con ?? "n/a"}`;
-    }
-    return JSON.stringify(item);
-  });
+  return value.map(formatTradeOffLine);
 }
 
 export function conceptToMarkdown(concept: PublicKnowledgeConcept): string {

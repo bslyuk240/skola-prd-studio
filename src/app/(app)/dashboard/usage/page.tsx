@@ -1,9 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { projects, documents, featureRequests, featureDocuments, securityScans } from "@/db/schema";
+import { projects, documents, featureRequests, featureDocuments, securityScans, eieKnowledgeSources } from "@/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
 import Link from "next/link";
-import { ArrowLeft, Zap, FileText, Shield, GitBranch } from "lucide-react";
+import { ArrowLeft, Zap, FileText, Shield, GitBranch, BookOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -47,11 +47,18 @@ export default async function UsagePage() {
     .where(eq(securityScans.userId, userId))
     .orderBy(desc(securityScans.createdAt));
 
+  const allEieSources = await db
+    .select()
+    .from(eieKnowledgeSources)
+    .where(eq(eieKnowledgeSources.createdBy, userId))
+    .orderBy(desc(eieKnowledgeSources.updatedAt));
+
   // Totals
   const blueprintCredits = allDocs.reduce((s, d) => s + (d.aiCreditsUsed ?? 0), 0);
   const featureCredits = allFeatureDocs.reduce((s, d) => s + (d.aiCreditsUsed ?? 0), 0);
   const securityCredits = allScans.reduce((s, s2) => s + (s2.aiCreditsUsed ?? 0), 0);
-  const totalConsumed = blueprintCredits + featureCredits + securityCredits;
+  const eieCredits = allEieSources.reduce((s, source) => s + (source.aiCreditsUsed ?? 0), 0);
+  const totalConsumed = blueprintCredits + featureCredits + securityCredits + eieCredits;
   const percentage = Math.min(100, Math.round((totalConsumed / CREDIT_LIMIT) * 100));
   const remaining = Math.max(0, CREDIT_LIMIT - totalConsumed);
 
@@ -62,6 +69,7 @@ export default async function UsagePage() {
   const usedBlueprintDocs = allDocs.filter((d) => (d.aiCreditsUsed ?? 0) > 0);
   const usedFeatureDocs = allFeatureDocs.filter((d) => (d.aiCreditsUsed ?? 0) > 0);
   const usedScans = allScans.filter((s) => (s.aiCreditsUsed ?? 0) > 0);
+  const usedEieSources = allEieSources.filter((source) => (source.aiCreditsUsed ?? 0) > 0);
 
   // Lookup maps
   const projectMap = Object.fromEntries(userProjects.map((p) => [p.id, p.name]));
@@ -161,6 +169,7 @@ export default async function UsagePage() {
                   { label: "Blueprint Documents", value: blueprintCredits, color: "bg-blue-500" },
                   { label: "Feature Documents", value: featureCredits, color: "bg-emerald-500" },
                   { label: "Security Scans", value: securityCredits, color: "bg-red-500" },
+                  { label: "EIE Ingestion", value: eieCredits, color: "bg-primary" },
                 ].map(({ label, value, color }) => (
                   <div key={label}>
                     <div className="flex justify-between text-xs mb-1">
@@ -261,6 +270,33 @@ export default async function UsagePage() {
                     )}
                     <span className="text-xs font-semibold text-foreground">{scan.aiCreditsUsed} credits</span>
                   </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {usedEieSources.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" /> EIE Source Ingestions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4">
+            <div className="space-y-2">
+              {usedEieSources.slice(0, 20).map((source) => (
+                <div key={source.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{source.name}</p>
+                    <p className="text-xs capitalize text-muted-foreground">
+                      {source.sourceType.replace(/_/g, " ")} · {source.status}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-foreground shrink-0">
+                    {source.aiCreditsUsed} credits
+                  </span>
                 </div>
               ))}
             </div>

@@ -1,5 +1,7 @@
 import type { EieKnowledgeSource } from "@/db/schema";
+import { htmlToPlainText, parseDocument, parsePdf } from "@/lib/eie/parsers/document";
 import { assertPublicUrl } from "@/lib/eie/security/url-validator";
+import { PDF_URL_PATTERN } from "@/lib/eie/url-patterns";
 
 const TEXT_FILE_EXTENSIONS = [".md", ".markdown", ".txt", ".json", ".ts", ".tsx", ".js", ".jsx"];
 
@@ -87,7 +89,7 @@ export async function fetchGitHubRepo(
 
 const MAX_REDIRECTS = 3;
 
-export async function fetchRemoteDocument(url: string): Promise<string> {
+async function fetchRemoteBytes(url: string): Promise<{ buffer: Buffer; contentType: string }> {
   let currentUrl = url;
 
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
@@ -108,24 +110,42 @@ export async function fetchRemoteDocument(url: string): Promise<string> {
     }
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch document: ${res.status}`);
+      throw new Error(`Failed to fetch remote resource: ${res.status}`);
     }
 
     const contentType = res.headers.get("content-type") ?? "";
-    if (contentType.includes("text") || contentType.includes("json")) {
-      return res.text();
-    }
-    throw new Error(`Unsupported remote content type: ${contentType}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { buffer, contentType };
   }
 
-  throw new Error("Too many redirects while fetching remote document");
+  throw new Error("Too many redirects while fetching remote resource");
 }
 
-/** Placeholder for caption/transcript extraction — wired in Phase 5 async pipeline. */
-export async function fetchYouTubeTranscript(_url: string): Promise<string> {
-  throw new Error(
-    "Video transcription is not yet configured. Connect Whisper or a caption provider."
-  );
+export async function fetchRemoteDocument(url: string): Promise<string> {
+  const { buffer, contentType } = await fetchRemoteBytes(url);
+
+  if (contentType.includes("pdf") || PDF_URL_PATTERN.test(url)) {
+    return parsePdf(buffer);
+  }
+
+  if (contentType.includes("html")) {
+    const text = htmlToPlainText(buffer.toString("utf-8"));
+    if (text.length < 20) {
+      throw new Error("Web page did not contain enough extractable text");
+    }
+    return text;
+  }
+
+  if (contentType.includes("text") || contentType.includes("json")) {
+    return buffer.toString("utf-8");
+  }
+
+  throw new Error(`Unsupported remote content type: ${contentType || "unknown"}`);
+}
+
+export async function fetchYouTubeTranscript(url: string): Promise<string> {
+  const { fetchVideoTranscript } = await import("@/lib/eie/transcription");
+  return fetchVideoTranscript(url);
 }
 
 export async function extractTextFromUrl(source: EieKnowledgeSource): Promise<string> {
@@ -139,11 +159,22 @@ export async function extractTextFromUrl(source: EieKnowledgeSource): Promise<st
         source.sourceUrl,
         (source.metadata as { branch?: string } | null)?.branch ?? "main"
       );
-    case "video_url":
-      return fetchYouTubeTranscript(source.sourceUrl);
+    case "video_url": {
+      const { fetchVideoTranscript } = await import("@/lib/eie/transcription");
+      return fetchVideoTranscript(source.sourceUrl);
+    }
+    case "pdf":
+      if (PDF_URL_PATTERN.test(source.sourceUrl) || source.sourceUrl.toLowerCase().includes(".pdf")) {
+        const { buffer, contentType } = await fetchRemoteBytes(source.sourceUrl);
+        if (contentType.includes("pdf") || PDF_URL_PATTERN.test(source.sourceUrl)) {
+          return parsePdf(buffer);
+        }
+      }
+      return fetchRemoteDocument(source.sourceUrl);
     case "official_doc":
     case "markdown_file":
     case "research_paper":
+    case "book":
       return fetchRemoteDocument(source.sourceUrl);
     default:
       throw new Error(`URL extraction not supported for type: ${source.sourceType}`);

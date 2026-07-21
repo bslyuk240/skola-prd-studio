@@ -16,6 +16,7 @@ interface CreditStatus {
     blueprintDocs: number;
     featureDocs: number;
     securityScans: number;
+    eieIngestion: number;
   };
 }
 
@@ -76,6 +77,7 @@ export function CreditUsageWidget() {
               { label: "Blueprint docs", value: status.breakdown.blueprintDocs },
               { label: "Feature docs", value: status.breakdown.featureDocs },
               { label: "Security scans", value: status.breakdown.securityScans },
+              { label: "EIE ingestion", value: status.breakdown.eieIngestion },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between text-xs">
                 <span className="text-muted-foreground">{label}</span>
