@@ -6,9 +6,11 @@ import { eq, and } from "drizzle-orm";
 import { buildFeaturePrompt, FeatureContext } from "../../src/lib/feature-prompts";
 import { generateText, DEFAULT_MODEL } from "../../src/lib/openrouter";
 import { calcFeatureDocCredits } from "../../src/lib/credits";
+import { verifyBackgroundRequest } from "../../src/lib/background-function-auth";
 
 interface Event {
   body?: string | null;
+  headers?: Record<string, string | undefined>;
 }
 
 export const handler = async (event: Event) => {
@@ -16,7 +18,18 @@ export const handler = async (event: Event) => {
   let documentType = "";
 
   try {
-    const payload = JSON.parse(event.body ?? "{}");
+    const rawBody = event.body ?? "{}";
+    if (
+      !verifyBackgroundRequest(
+        rawBody,
+        event.headers,
+        process.env.BACKGROUND_FUNCTION_SECRET
+      )
+    ) {
+      return { statusCode: 403, body: "Forbidden" };
+    }
+
+    const payload = JSON.parse(rawBody);
     featureRequestId = payload.featureRequestId;
     documentType = payload.documentType;
     const userId = payload.userId;

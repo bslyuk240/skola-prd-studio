@@ -1,12 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { projects, documents, userPreferences } from "@/db/schema";
+import { projects, documents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { buildPrompt, ProjectContext } from "@/lib/ai-prompts";
-import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
-import { calcDocCredits } from "@/lib/credits";
 import { z } from "zod";
+import { generateProjectDocument } from "@/lib/generate-project-document";
+import { triggerBackground } from "@/lib/trigger-background";
 
 export const maxDuration = 60;
 
@@ -14,28 +13,6 @@ const schema = z.object({
   projectId: z.string().min(1),
   documentType: z.enum(["prd", "trd", "app_flow", "ux_brief", "backend_schema", "implementation_plan", "security_blueprint"]),
 });
-
-// Fire the background function and bail out fast if it doesn't respond —
-// a hung call here would otherwise eat the whole sync-function time budget
-// before falling back to inline generation, guaranteeing a 504 either way.
-async function triggerBackground(url: string, payload: object): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    return res.ok;
-  } catch (err) {
-    console.error("[generate] background dispatch failed:", err instanceof Error ? err.message : err);
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -78,51 +55,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Load user's saved model preference
-    const [userPrefs] = await db
-      .select()
-      .from(userPreferences)
-      .where(eq(userPreferences.userId, userId))
-      .limit(1);
-    // Fallback: migrate old invalid model IDs
-    const savedModel = userPrefs?.aiModel ?? DEFAULT_MODEL;
-    const model = savedModel === "google/gemini-2.0-flash-001" ? DEFAULT_MODEL : savedModel;
-
-    const ctx = (project.wizardData ?? {}) as ProjectContext;
-    ctx.appName = project.name;
-    ctx.shortDescription = project.description ?? "";
-    ctx.securityLevel = project.securityLevel ?? "standard";
-
-    const prompt = buildPrompt(documentType, ctx);
-    const content = await generateText(prompt, model);
-    const wordCount = content.split(/\s+/).length;
-    const aiCreditsUsed = calcDocCredits(wordCount);
-
-    await db
-      .update(documents)
-      .set({
-        content,
-        wordCount,
-        aiCreditsUsed,
-        status: "ready",
-        version: 1,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
-
-    // Recalculate readiness score
-    const allDocs = await db.select().from(documents).where(eq(documents.projectId, projectId));
-    const ready = allDocs.filter((d) => d.status === "ready" || d.status === "approved").length;
-    const readinessScore = Math.round((ready / 7) * 100);
-
-    const securityDoc = allDocs.find((d) => d.type === "security_blueprint" && d.status !== "pending");
-    const securityScore = securityDoc ? Math.min(100, readinessScore + 20) : readinessScore;
-
-    await db
-      .update(projects)
-      .set({ readinessScore, securityScore, status: ready === 7 ? "review" : "generating", updatedAt: new Date() })
-      .where(eq(projects.id, projectId));
-
+    const { wordCount } = await generateProjectDocument(projectId, documentType, userId);
     return NextResponse.json({ success: true, wordCount });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

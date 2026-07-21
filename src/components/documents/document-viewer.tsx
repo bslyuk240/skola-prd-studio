@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Project, Document } from "@/db/schema";
+import { EieEnrichmentPanel } from "@/components/eie/enrichment-panel";
+import type { DocumentEieRetrieval } from "@/lib/eie/retrievals";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, CheckCircle, ArrowLeft, Copy } from "lucide-react";
@@ -12,9 +14,10 @@ import { Loader2, RefreshCw, CheckCircle, ArrowLeft, Copy } from "lucide-react";
 interface Props {
   project: Project;
   document: Document;
+  eieRetrievals?: DocumentEieRetrieval[];
 }
 
-export function DocumentViewer({ project, document: doc }: Props) {
+export function DocumentViewer({ project, document: doc, eieRetrievals = [] }: Props) {
   const router = useRouter();
   const [regenerating, setRegenerating] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -80,6 +83,7 @@ export function DocumentViewer({ project, document: doc }: Props) {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
+          <EieEnrichmentPanel retrievals={eieRetrievals} />
           <Button variant="outline" size="sm" className="gap-1.5" onClick={copyContent}>
             <Copy className="w-3.5 h-3.5" /> Copy
           </Button>

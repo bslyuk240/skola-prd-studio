@@ -7,6 +7,9 @@ import {
   jsonb,
   uuid,
   pgEnum,
+  vector,
+  numeric,
+  unique,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -457,6 +460,144 @@ export const securityFindings = pgTable("security_findings", {
 
 export type SecurityScan = typeof securityScans.$inferSelect;
 export type SecurityFinding = typeof securityFindings.$inferSelect;
+
+// ─── Engineering Intelligence Engine (EIE) ────────────────────────────────────
+
+export const eieSourceTypeEnum = pgEnum("eie_source_type", [
+  "video_upload",
+  "video_url",
+  "pdf",
+  "book",
+  "official_doc",
+  "github_repo",
+  "markdown_file",
+  "research_paper",
+  "personal_note",
+]);
+
+export const eieSourceStatusEnum = pgEnum("eie_source_status", [
+  "pending",
+  "processing",
+  "success",
+  "failed",
+]);
+
+export const eieSynthesisStatusEnum = pgEnum("eie_synthesis_status", [
+  "draft",
+  "needs_revision",
+  "approved",
+  "rejected",
+]);
+
+export const eieKnowledgeSources = pgTable("eie_knowledge_sources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  sourceType: eieSourceTypeEnum("source_type").notNull(),
+  sourceUrl: text("source_url"),
+  fileKey: text("file_key"),
+  rawContent: text("raw_content"),
+  status: eieSourceStatusEnum("status").default("pending").notNull(),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const eieSynthesisDrafts = pgTable("eie_synthesis_drafts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sourceId: uuid("source_id").references(() => eieKnowledgeSources.id, {
+    onDelete: "set null",
+  }),
+  conceptName: text("concept_name").notNull(),
+  category: text("category").notNull(),
+  tags: text("tags").array(),
+  summary: text("summary").notNull(),
+  practicalExplanation: text("practical_explanation").notNull(),
+  bestPractices: jsonb("best_practices").notNull(),
+  tradeOffs: jsonb("trade_offs").notNull(),
+  alternativeApproaches: jsonb("alternative_approaches").notNull(),
+  securityConsiderations: jsonb("security_considerations").notNull(),
+  commonMistakes: jsonb("common_mistakes").notNull(),
+  implementationRecommendations: jsonb("implementation_recommendations").notNull(),
+  references: jsonb("references").notNull(),
+  status: eieSynthesisStatusEnum("status").default("draft").notNull(),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const eiePublishedKnowledge = pgTable("eie_published_knowledge", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  synthesisDraftId: uuid("synthesis_draft_id").references(
+    () => eieSynthesisDrafts.id,
+    { onDelete: "set null" }
+  ),
+  slug: text("slug").notNull().unique(),
+  conceptName: text("concept_name").notNull(),
+  category: text("category").notNull(),
+  tags: text("tags").array(),
+  summary: text("summary").notNull(),
+  practicalExplanation: text("practical_explanation").notNull(),
+  bestPractices: jsonb("best_practices").notNull(),
+  tradeOffs: jsonb("trade_offs").notNull(),
+  alternativeApproaches: jsonb("alternative_approaches").notNull(),
+  securityConsiderations: jsonb("security_considerations").notNull(),
+  commonMistakes: jsonb("common_mistakes").notNull(),
+  implementationRecommendations: jsonb("implementation_recommendations").notNull(),
+  references: jsonb("references").notNull(),
+  viewsCount: integer("views_count").default(0).notNull(),
+  embedding: vector("embedding", { dimensions: 1536 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const eieConceptRelationships = pgTable(
+  "eie_concept_relationships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceKnowledgeId: uuid("source_knowledge_id")
+      .notNull()
+      .references(() => eiePublishedKnowledge.id, { onDelete: "cascade" }),
+    targetKnowledgeId: uuid("target_knowledge_id")
+      .notNull()
+      .references(() => eiePublishedKnowledge.id, { onDelete: "cascade" }),
+    relationshipType: text("relationship_type").default("related_to").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("unique_concept_relationship_edge").on(
+      table.sourceKnowledgeId,
+      table.targetKnowledgeId,
+      table.relationshipType
+    ),
+  ]
+);
+
+export const eiePrdRetrievals = pgTable("eie_prd_retrievals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id").references(() => documents.id, {
+    onDelete: "set null",
+  }),
+  publishedKnowledgeId: uuid("published_knowledge_id")
+    .notNull()
+    .references(() => eiePublishedKnowledge.id, { onDelete: "cascade" }),
+  relevanceScore: numeric("relevance_score", { precision: 4, scale: 3 }).notNull(),
+  retrievedAt: timestamp("retrieved_at").defaultNow().notNull(),
+});
+
+export type EieKnowledgeSource = typeof eieKnowledgeSources.$inferSelect;
+export type NewEieKnowledgeSource = typeof eieKnowledgeSources.$inferInsert;
+export type EieSynthesisDraft = typeof eieSynthesisDrafts.$inferSelect;
+export type NewEieSynthesisDraft = typeof eieSynthesisDrafts.$inferInsert;
+export type EiePublishedKnowledge = typeof eiePublishedKnowledge.$inferSelect;
+export type NewEiePublishedKnowledge = typeof eiePublishedKnowledge.$inferInsert;
+export type EieConceptRelationship = typeof eieConceptRelationships.$inferSelect;
+export type EiePrdRetrieval = typeof eiePrdRetrievals.$inferSelect;
 
 // Types
 export type Project = typeof projects.$inferSelect;

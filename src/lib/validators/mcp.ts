@@ -7,6 +7,7 @@ export const mcpToolNameSchema = z.enum([
   "report_task_progress",
   "report_task_completed",
   "create_question_for_user",
+  "query_engineering_knowledge",
 ]);
 
 export const mcpRequestSchema = z.object({
@@ -54,4 +55,10 @@ export const reportCompletedParams = z.object({
 export const createQuestionParams = z.object({
   taskId: z.string().min(1),
   question: z.string().min(1),
+});
+
+export const queryEngineeringKnowledgeParams = z.object({
+  searchQuery: z.string().min(1).max(500),
+  category: z.string().optional(),
+  limit: z.number().int().min(1).max(10).optional(),
 });

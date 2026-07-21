@@ -10,7 +10,11 @@ import {
   reportProgressParams,
   reportCompletedParams,
   createQuestionParams,
+  queryEngineeringKnowledgeParams,
 } from "@/lib/validators/mcp";
+import {
+  handleQueryEngineeringKnowledge,
+} from "@/lib/eie/mcp-tool";
 
 const TOOLS = [
   {
@@ -62,6 +66,19 @@ const TOOLS = [
       type: "object",
       properties: { taskId: { type: "string" }, question: { type: "string" } },
       required: ["taskId", "question"],
+    },
+  },
+  {
+    name: "query_engineering_knowledge",
+    description: "Search published engineering concepts from the Learning Hub knowledge library.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        searchQuery: { type: "string" },
+        category: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: ["searchQuery"],
     },
   },
 ];
@@ -165,6 +182,14 @@ export async function POST(req: NextRequest) {
         const p = createQuestionParams.safeParse(args);
         if (!p.success) return rpcError(id, -32602, "Invalid params for create_question_for_user");
         return toolResult(id, await createQuestionForUser(connection.projectId, p.data));
+      }
+
+      case "query_engineering_knowledge": {
+        const p = queryEngineeringKnowledgeParams.safeParse(args);
+        if (!p.success) {
+          return rpcError(id, -32602, "Invalid params for query_engineering_knowledge");
+        }
+        return toolResult(id, await handleQueryEngineeringKnowledge(p.data));
       }
 
       default:

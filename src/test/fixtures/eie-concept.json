@@ -1,0 +1,29 @@
+{
+  "slug": "role-based-access-control",
+  "conceptName": "Role-Based Access Control",
+  "category": "security_compliance",
+  "tags": ["security", "rbac", "authorization"],
+  "summary": "Assign permissions to roles instead of individual users.",
+  "practicalExplanation": "Define roles that map to permission sets and assign users to roles.",
+  "bestPractices": [
+    "Use least-privilege defaults",
+    "Separate admin and user roles"
+  ],
+  "tradeOffs": [
+    "More roles increase maintenance overhead"
+  ],
+  "alternativeApproaches": [
+    "Attribute-based access control (ABAC)"
+  ],
+  "securityConsiderations": [
+    "Audit role changes",
+    "Prevent privilege escalation"
+  ],
+  "commonMistakes": [
+    "Hardcoding role checks in UI only"
+  ],
+  "implementationRecommendations": {
+    "middleware": "Check role on every protected route",
+    "database": "Store role assignments in a join table"
+  }
+}

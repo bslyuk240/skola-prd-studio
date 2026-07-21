@@ -15,11 +15,6 @@ export default async function SettingsPage() {
 
   const prefs = prefsRows[0] ?? null;
 
-  // Check which env vars are actually set
-  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
-  const hasDatabase = !!process.env.DATABASE_URL;
-  const hasClerk = !!process.env.CLERK_SECRET_KEY;
-
   return (
     <SettingsClient
       user={{
@@ -35,7 +30,6 @@ export default async function SettingsPage() {
         wordCountVisible: prefs?.wordCountVisible ?? true,
         autoRefresh: prefs?.autoRefresh ?? true,
       }}
-      envStatus={{ hasOpenRouter, hasDatabase, hasClerk }}
     />
   );
 }

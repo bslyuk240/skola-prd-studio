@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Project, Document } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -14,6 +13,8 @@ import {
   Loader2, RefreshCw, Eye, CheckCircle2, Clock, AlertCircle, Wand2, Download
 } from "lucide-react";
 import { cn, scoreColor } from "@/lib/utils";
+import { isEieEnabledForProject } from "@/lib/eie/project-settings";
+import { ProjectEieSettings } from "@/components/eie/project-eie-settings";
 
 const DOC_META: Record<string, { icon: React.ElementType; label: string; color: string; description: string }> = {
   prd: { icon: FileText, label: "PRD", color: "text-blue-600", description: "Product Requirements Document" },
@@ -41,6 +42,8 @@ interface Props {
 export function DocumentsClient({ project, documents }: Props) {
   const router = useRouter();
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const [eiePhase, setEiePhase] = useState<Record<string, boolean>>({});
+  const eieEnabled = isEieEnabledForProject(project);
 
   const ready = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const readinessScore = Math.round((ready / 7) * 100);
@@ -59,6 +62,12 @@ export function DocumentsClient({ project, documents }: Props) {
 
   async function generateDoc(docType: string) {
     setGenerating((p) => ({ ...p, [docType]: true }));
+    if (eieEnabled) {
+      setEiePhase((p) => ({ ...p, [docType]: true }));
+      setTimeout(() => {
+        setEiePhase((p) => ({ ...p, [docType]: false }));
+      }, 4000);
+    }
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -82,6 +91,7 @@ export function DocumentsClient({ project, documents }: Props) {
       toast.error("Generation failed. Check your OpenRouter API key.");
     } finally {
       setGenerating((p) => ({ ...p, [docType]: false }));
+      setEiePhase((p) => ({ ...p, [docType]: false }));
     }
   }
 
@@ -159,6 +169,11 @@ export function DocumentsClient({ project, documents }: Props) {
         </Card>
       </div>
 
+      {/* EIE settings */}
+      <div className="mb-8">
+        <ProjectEieSettings project={project} />
+      </div>
+
       {/* Document cards */}
       <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
         {Object.entries(DOC_META).map(([type, meta]) => {
@@ -167,6 +182,7 @@ export function DocumentsClient({ project, documents }: Props) {
           const statusCfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pending;
           const StatusIcon = statusCfg.icon;
           const isGenerating = generating[type];
+          const showEieStep = eieEnabled && (eiePhase[type] || isGenerating);
           const DocIcon = meta.icon;
 
           return (
@@ -206,7 +222,12 @@ export function DocumentsClient({ project, documents }: Props) {
                     disabled={isGenerating || status === "generating"}
                   >
                     {isGenerating ? (
-                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {showEieStep && eiePhase[type]
+                          ? "Querying engineering knowledge…"
+                          : "Generating…"}
+                      </>
                     ) : (
                       <><RefreshCw className="w-3.5 h-3.5" /> {status === "pending" ? "Generate" : "Regenerate"}</>
                     )}

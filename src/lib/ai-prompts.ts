@@ -24,6 +24,7 @@ export type ProjectContext = {
   fileUpload?: boolean;
   securityLevel?: string;
   securityToggles?: Record<string, boolean>;
+  enableEieCrossReferencing?: boolean;
 };
 
 function baseContext(ctx: ProjectContext) {

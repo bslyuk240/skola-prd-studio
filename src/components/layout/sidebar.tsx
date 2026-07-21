@@ -16,6 +16,9 @@ import {
   HelpCircle,
   LogOut,
   GitBranch,
+  BookOpen,
+  Brain,
+  Key,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditUsageCompact } from "@/components/dashboard/credit-usage-widget";
@@ -25,6 +28,7 @@ const navItems = [
   { href: "/new-blueprint", icon: Plus, label: "New Blueprint" },
   { href: "/feature-planner", icon: GitBranch, label: "Feature Planner" },
   { href: "/security-fix-planner", icon: Shield, label: "Security Planner" },
+  { href: "/learning-hub", icon: BookOpen, label: "Learning Hub" },
 ];
 
 const projectItems = [
@@ -45,8 +49,11 @@ export function Sidebar({ projectId: projectIdProp, projectName }: SidebarProps)
   const { signOut } = useClerk();
   const { user } = useUser();
 
-  // Sidebar is rendered once in the root layout with no props, so derive the
-  // active project from the URL instead of requiring every page to pass it.
+  const role =
+    (user?.publicMetadata?.role as string | undefined) ??
+    (user?.unsafeMetadata?.role as string | undefined);
+  const isAdmin = role === "admin" || role === "platform_admin";
+  // Derive the active project from the URL instead of requiring every page to pass it.
   const projectId = projectIdProp ?? pathname.match(/^\/projects\/([^/]+)/)?.[1];
 
   return (
@@ -80,6 +87,39 @@ export function Sidebar({ projectId: projectIdProp, projectName }: SidebarProps)
             </Link>
           );
         })}
+
+        {isAdmin ? (
+          <>
+            <div className="pt-4 pb-1 px-3">
+              <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider">
+                Engineering Intelligence
+              </p>
+            </div>
+            {[
+              { href: "/admin/eie", icon: Brain, label: "EIE Command Center" },
+              { href: "/admin/eie/ingest", icon: Plus, label: "Ingest Source" },
+              { href: "/admin/eie/review", icon: CheckSquare, label: "Review Queue" },
+              { href: "/admin/eie/connections", icon: Key, label: "Connections" },
+            ].map(({ href, icon: Icon, label }) => {
+              const active = pathname === href || pathname.startsWith(`${href}/`);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </Link>
+              );
+            })}
+          </>
+        ) : null}
 
         {projectId && (
           <>

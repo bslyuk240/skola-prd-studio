@@ -7,6 +7,7 @@ import { buildFeaturePrompt, FeatureContext } from "@/lib/feature-prompts";
 import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
 import { calcFeatureDocCredits } from "@/lib/credits";
 import { z } from "zod";
+import { triggerBackground } from "@/lib/trigger-background";
 
 export const maxDuration = 60;
 
@@ -24,28 +25,6 @@ const schema = z.object({
     "deployment_plan",
   ]),
 });
-
-// Fire the background function and bail out fast if it doesn't respond —
-// a hung call here would otherwise eat the whole sync-function time budget
-// before falling back to inline generation, guaranteeing a 504 either way.
-async function triggerBackground(url: string, payload: object): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    return res.ok;
-  } catch (err) {
-    console.error("[feature/generate] background dispatch failed:", err instanceof Error ? err.message : err);
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();

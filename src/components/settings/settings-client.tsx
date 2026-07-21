@@ -5,9 +5,9 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { UserButton } from "@clerk/nextjs";
 import {
-  User, Key, Bot, Shield, Palette, Zap,
-  Check, ExternalLink,
-  CheckCircle2, XCircle, Loader2,
+  User, Bot, Shield, Palette, Zap,
+  Check,
+  Loader2,
   FileText, GitBranch,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "account", label: "Account", icon: User },
-  { id: "api", label: "API Keys", icon: Key },
   { id: "ai", label: "AI Model", icon: Bot },
   { id: "security", label: "Security Defaults", icon: Shield },
   { id: "appearance", label: "Appearance", icon: Palette },
@@ -75,7 +74,6 @@ interface Props {
     wordCountVisible: boolean;
     autoRefresh: boolean;
   };
-  envStatus: { hasOpenRouter: boolean; hasDatabase: boolean; hasClerk: boolean };
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -304,13 +302,7 @@ function UsageTabContent() {
   );
 }
 
-function StatusDot({ ok }: { ok: boolean }) {
-  return ok
-    ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-    : <XCircle className="w-4 h-4 text-red-600 shrink-0" />;
-}
-
-export function SettingsClient({ user, prefs, envStatus }: Props) {
+export function SettingsClient({ user, prefs }: Props) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>("account");
 
@@ -466,93 +458,6 @@ export function SettingsClient({ user, prefs, envStatus }: Props) {
                     <p className="text-xs text-muted-foreground">Permanently delete your account and all projects. This cannot be undone.</p>
                   </div>
                   <Button size="sm" variant="destructive" disabled>Delete Account</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* ── API Keys ── */}
-        {activeTab === "api" && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">API Keys</h2>
-              <p className="text-muted-foreground text-sm mt-0.5">
-                These keys are configured in your <code className="text-xs bg-muted px-1 py-0.5 rounded">.env.local</code> file. Edit that file to change them — they cannot be changed from the UI at runtime for security reasons.
-              </p>
-            </div>
-
-            {/* OpenRouter */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <StatusDot ok={envStatus.hasOpenRouter} />
-                  <CardTitle className="text-sm font-semibold">OpenRouter API Key</CardTitle>
-                  {envStatus.hasOpenRouter
-                    ? <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50 ml-auto">Configured</Badge>
-                    : <Badge variant="outline" className="text-xs text-red-600 border-red-200 bg-red-50 ml-auto">Missing</Badge>}
-                </div>
-                <CardDescription className="text-xs mt-1">
-                  Used to generate all 7 build documents via AI.{" "}
-                  <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">
-                    Get a key at openrouter.ai <ExternalLink className="w-3 h-3" />
-                  </a>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 space-y-3">
-                <div className="bg-muted/60 rounded-lg p-4 font-mono text-xs text-muted-foreground">
-                  OPENROUTER_API_KEY={envStatus.hasOpenRouter ? "sk-or-v1-••••••••••••••••" : "<not set>"}
-                </div>
-                {!envStatus.hasOpenRouter && (
-                  <p className="text-xs text-red-600 font-medium">
-                    ⚠ Add OPENROUTER_API_KEY to your .env.local file then restart the dev server. Document generation will not work without this.
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  To update: edit <code className="bg-muted px-1 rounded">.env.local</code> → set <code className="bg-muted px-1 rounded">OPENROUTER_API_KEY=your_key</code> → restart the server.
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Neon */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <StatusDot ok={envStatus.hasDatabase} />
-                  <CardTitle className="text-sm font-semibold">Neon Database</CardTitle>
-                  {envStatus.hasDatabase
-                    ? <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50 ml-auto">Configured</Badge>
-                    : <Badge variant="outline" className="text-xs text-red-600 border-red-200 bg-red-50 ml-auto">Missing</Badge>}
-                </div>
-                <CardDescription className="text-xs mt-1">PostgreSQL serverless database for all projects and documents.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-6 pb-6">
-                <div className="bg-muted/60 rounded-lg p-4 font-mono text-xs text-muted-foreground">
-                  DATABASE_URL={envStatus.hasDatabase ? "postgresql://••••@••••.neon.tech/neondb" : "<not set>"}
-                </div>
-                {!envStatus.hasDatabase && (
-                  <p className="text-xs text-red-600 font-medium mt-2">
-                    ⚠ Add DATABASE_URL to your .env.local. Get a free database at neon.tech.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Clerk */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <StatusDot ok={envStatus.hasClerk} />
-                  <CardTitle className="text-sm font-semibold">Clerk Authentication</CardTitle>
-                  {envStatus.hasClerk
-                    ? <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50 ml-auto">Configured</Badge>
-                    : <Badge variant="outline" className="text-xs text-red-600 border-red-200 bg-red-50 ml-auto">Missing</Badge>}
-                </div>
-                <CardDescription className="text-xs mt-1">Handles sign-up, sign-in, and user session management.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-6 pb-6">
-                <div className="bg-muted/60 rounded-lg p-4 font-mono text-xs text-muted-foreground">
-                  CLERK_SECRET_KEY={envStatus.hasClerk ? "sk_test_••••••••••••••••" : "<not set>"}
                 </div>
               </CardContent>
             </Card>
