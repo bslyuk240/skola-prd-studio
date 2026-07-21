@@ -98,7 +98,7 @@ export default async function LearningHubConceptPage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav className="space-y-1">
           {sections.map((section) => (
             <a

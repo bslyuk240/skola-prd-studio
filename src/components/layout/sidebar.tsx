@@ -57,7 +57,7 @@ export function Sidebar({ projectId: projectIdProp, projectName }: SidebarProps)
   const projectId = projectIdProp ?? pathname.match(/^\/projects\/([^/]+)/)?.[1];
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col h-full bg-sidebar border-r border-sidebar-border">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-sidebar border-r border-sidebar-border">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
         <Image src="/prd-logo.png" alt="SkolaTech PRD Studio" width={28} height={28} className="rounded-lg shrink-0" />
