@@ -9,11 +9,13 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, scoreColor } from "@/lib/utils";
-import { CREDIT_LIMIT } from "@/lib/credits";
+import { getUserCreditLimit } from "@/lib/credits";
 
 export default async function UsagePage() {
   const { userId } = await auth();
   if (!userId) return null;
+
+  const CREDIT_LIMIT = await getUserCreditLimit(userId);
 
   // Fetch user's projects and their docs
   const userProjects = await db.select().from(projects).where(eq(projects.userId, userId));
@@ -59,7 +61,7 @@ export default async function UsagePage() {
   const securityCredits = allScans.reduce((s, s2) => s + (s2.aiCreditsUsed ?? 0), 0);
   const eieCredits = allEieSources.reduce((s, source) => s + (source.aiCreditsUsed ?? 0), 0);
   const totalConsumed = blueprintCredits + featureCredits + securityCredits + eieCredits;
-  const percentage = Math.min(100, Math.round((totalConsumed / CREDIT_LIMIT) * 100));
+  const percentage = CREDIT_LIMIT > 0 ? Math.min(100, Math.round((totalConsumed / CREDIT_LIMIT) * 100)) : 100;
   const remaining = Math.max(0, CREDIT_LIMIT - totalConsumed);
 
   const isWarning = percentage >= 70;

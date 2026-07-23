@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { projects, documents, featureRequests, featureDocuments, securityScans, eieKnowledgeSources } from "@/db/schema";
+import { projects, documents, featureRequests, featureDocuments, securityScans, eieKnowledgeSources, userPreferences } from "@/db/schema";
 import { eq, inArray, sum } from "drizzle-orm";
 
-export const CREDIT_LIMIT = 1000;
+// Fallback used until a user has a saved preference row.
+export const DEFAULT_CREDIT_LIMIT = 2000;
 
 // Credits = flat 10 + 1 per 100 words
 export function calcDocCredits(wordCount: number): number {
@@ -30,7 +31,18 @@ export interface CreditStatus {
   };
 }
 
+export async function getUserCreditLimit(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ creditLimit: userPreferences.creditLimit })
+    .from(userPreferences)
+    .where(eq(userPreferences.userId, userId))
+    .limit(1);
+  return row?.creditLimit ?? DEFAULT_CREDIT_LIMIT;
+}
+
 export async function getUserCreditStatus(userId: string): Promise<CreditStatus> {
+  const limit = await getUserCreditLimit(userId);
+
   // Get user's project IDs
   const userProjects = await db
     .select({ id: projects.id })
@@ -81,12 +93,12 @@ export async function getUserCreditStatus(userId: string): Promise<CreditStatus>
   const eieIngestion = Number(eieRow?.total ?? 0);
 
   const consumed = blueprintDocs + featureDocs + securityScansTotal + eieIngestion;
-  const remaining = Math.max(0, CREDIT_LIMIT - consumed);
-  const percentage = Math.min(100, Math.round((consumed / CREDIT_LIMIT) * 100));
+  const remaining = Math.max(0, limit - consumed);
+  const percentage = limit > 0 ? Math.min(100, Math.round((consumed / limit) * 100)) : 100;
 
   return {
     consumed,
-    limit: CREDIT_LIMIT,
+    limit,
     remaining,
     percentage,
     breakdown: {

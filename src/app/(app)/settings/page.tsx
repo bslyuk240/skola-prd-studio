@@ -29,6 +29,7 @@ export default async function SettingsPage() {
         defaultSecurityToggles: (prefs?.defaultSecurityToggles as Record<string, boolean>) ?? null,
         wordCountVisible: prefs?.wordCountVisible ?? true,
         autoRefresh: prefs?.autoRefresh ?? true,
+        creditLimit: prefs?.creditLimit ?? 2000,
       }}
     />
   );

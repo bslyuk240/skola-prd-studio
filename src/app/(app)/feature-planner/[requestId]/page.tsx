@@ -4,6 +4,7 @@ import { featureRequests, featureDocuments, featureTasks, repoConnections } from
 import { eq, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { FeaturePlanClient } from "@/components/feature/feature-plan-client";
+import { revertStaleFeatureDocs } from "@/lib/generation-status";
 
 interface Props {
   params: Promise<{ requestId: string }>;
@@ -20,6 +21,8 @@ export default async function FeaturePlanPage({ params }: Props) {
     .where(and(eq(featureRequests.id, requestId), eq(featureRequests.userId, userId)))
     .limit(1);
   if (!request) notFound();
+
+  await revertStaleFeatureDocs(requestId);
 
   const [docs, tasks] = await Promise.all([
     db.select().from(featureDocuments).where(eq(featureDocuments.featureRequestId, requestId)),

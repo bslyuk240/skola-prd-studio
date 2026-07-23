@@ -3,13 +3,14 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { projects, documents, featureRequests, featureDocuments, securityScans, eieKnowledgeSources } from "@/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
-import { CREDIT_LIMIT } from "@/lib/credits";
+import { getUserCreditLimit } from "@/lib/credits";
 
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
+    const creditLimit = await getUserCreditLimit(userId);
     const userProjects = await db.select().from(projects).where(eq(projects.userId, userId));
     const projectIds = userProjects.map((p) => p.id);
 
@@ -41,15 +42,15 @@ export async function GET() {
     const securityCredits = allScans.reduce((s, s2) => s + (s2.aiCreditsUsed ?? 0), 0);
     const eieCredits = allEieSources.reduce((s, source) => s + (source.aiCreditsUsed ?? 0), 0);
     const totalConsumed = blueprintCredits + featureCredits + securityCredits + eieCredits;
-    const percentage = Math.min(100, Math.round((totalConsumed / CREDIT_LIMIT) * 100));
-    const remaining = Math.max(0, CREDIT_LIMIT - totalConsumed);
+    const percentage = creditLimit > 0 ? Math.min(100, Math.round((totalConsumed / creditLimit) * 100)) : 100;
+    const remaining = Math.max(0, creditLimit - totalConsumed);
 
     const projectMap = Object.fromEntries(userProjects.map((p) => [p.id, p.name]));
     const requestMap = Object.fromEntries(userRequests.map((r) => [r.id, r.featureName]));
 
     return NextResponse.json({
       totalConsumed,
-      limit: CREDIT_LIMIT,
+      limit: creditLimit,
       remaining,
       percentage,
       breakdown: { blueprintCredits, featureCredits, securityCredits, eieCredits },

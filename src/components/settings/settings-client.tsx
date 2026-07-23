@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -73,6 +75,7 @@ interface Props {
     defaultSecurityToggles: Record<string, boolean> | null;
     wordCountVisible: boolean;
     autoRefresh: boolean;
+    creditLimit: number;
   };
 }
 
@@ -102,17 +105,50 @@ interface UsageDetail {
   eieSources: { id: string; name: string; sourceType: string; status: string; aiCreditsUsed: number | null; updatedAt: string }[];
 }
 
-function UsageTabContent() {
+function UsageTabContent({ initialLimit }: { initialLimit: number }) {
   const [data, setData] = useState<UsageDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [limitInput, setLimitInput] = useState(String(initialLimit));
+  const [savingLimit, setSavingLimit] = useState(false);
 
   useEffect(() => {
     fetch("/api/user/credits/detail")
       .then((r) => r.json())
-      .then((d) => setData(d))
+      .then((d) => {
+        setData(d);
+        if (typeof d?.limit === "number") setLimitInput(String(d.limit));
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function saveLimit() {
+    const parsed = Number(limitInput);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      toast.error("Enter a whole number of 0 or more.");
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      const res = await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creditLimit: parsed }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setData((prev) => (prev ? {
+        ...prev,
+        limit: parsed,
+        remaining: Math.max(0, parsed - prev.totalConsumed),
+        percentage: parsed > 0 ? Math.min(100, Math.round((prev.totalConsumed / parsed) * 100)) : 100,
+      } : prev));
+      toast.success("Credit limit updated.");
+    } catch {
+      toast.error("Failed to update credit limit.");
+    } finally {
+      setSavingLimit(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -152,6 +188,33 @@ function UsageTabContent() {
           </div>
           <Progress value={percentage} className={cn("h-2 mb-2", isCritical ? "[&>div]:bg-red-500" : isWarning ? "[&>div]:bg-amber-500" : "")} />
           <p className="text-xs text-muted-foreground">{remaining} credits remaining</p>
+        </CardContent>
+      </Card>
+
+      {/* Credit limit */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Credit Limit</CardTitle>
+          <CardDescription className="text-xs">Total AI credits available to your account each cycle.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          <div className="flex items-end gap-3">
+            <div className="flex-1 max-w-40">
+              <Label htmlFor="credit-limit" className="text-xs text-muted-foreground mb-1.5 block">Limit</Label>
+              <Input
+                id="credit-limit"
+                type="number"
+                min={0}
+                step={1}
+                value={limitInput}
+                onChange={(e) => setLimitInput(e.target.value)}
+              />
+            </div>
+            <Button size="sm" onClick={saveLimit} disabled={savingLimit} className="gap-1.5">
+              {savingLimit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Save Limit
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -634,7 +697,7 @@ export function SettingsClient({ user, prefs }: Props) {
         )}
 
         {/* ── Usage ── */}
-        {activeTab === "usage" && <UsageTabContent />}
+        {activeTab === "usage" && <UsageTabContent initialLimit={prefs.creditLimit} />}
 
         {/* ── Appearance ── */}
         {activeTab === "appearance" && (

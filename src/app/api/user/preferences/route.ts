@@ -11,6 +11,7 @@ const schema = z.object({
   defaultSecurityToggles: z.record(z.string(), z.boolean()).optional(),
   wordCountVisible: z.boolean().optional(),
   autoRefresh: z.boolean().optional(),
+  creditLimit: z.number().int().min(0).max(1000000).optional(),
 });
 
 export async function GET() {

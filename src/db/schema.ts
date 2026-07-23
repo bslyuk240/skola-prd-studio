@@ -277,6 +277,7 @@ export const userPreferences = pgTable("user_preferences", {
   defaultSecurityToggles: jsonb("default_security_toggles"),
   wordCountVisible: boolean("word_count_visible").default(true),
   autoRefresh: boolean("auto_refresh").default(true),
+  creditLimit: integer("credit_limit").default(2000).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
