@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatEieCategory } from "@/lib/eie/constants";
 import { incrementPublishedViews } from "@/lib/eie/search";
 import { ConceptCard } from "@/components/eie/concept-card";
+import { LearningHubSectionNav } from "@/components/eie/learning-hub-section-nav";
 
 import { formatTradeOffLine } from "@/lib/eie/format-synthesis-fields";
 
@@ -79,6 +80,11 @@ export default async function LearningHubConceptPage({ params }: PageProps) {
     },
   ];
 
+  const sectionLinks = sections.map((section) => ({
+    title: section.title,
+    id: section.title.toLowerCase().replace(/\s+/g, "-"),
+  }));
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -99,17 +105,7 @@ export default async function LearningHubConceptPage({ params }: PageProps) {
       </div>
 
       <div className="grid min-w-0 gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav className="space-y-1">
-          {sections.map((section) => (
-            <a
-              key={section.title}
-              href={`#${section.title.toLowerCase().replace(/\s+/g, "-")}`}
-              className="block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {section.title}
-            </a>
-          ))}
-        </nav>
+        <LearningHubSectionNav sections={sectionLinks} />
 
         <div className="space-y-8">
           {sections.map((section) => (
