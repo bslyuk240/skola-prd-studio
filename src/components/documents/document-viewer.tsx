@@ -30,6 +30,14 @@ export function DocumentViewer({ project, document: doc, eieRetrievals = [] }: P
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id, documentType: doc.type }),
       });
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        if (data.code === "BLUEPRINT_NOT_APPROVED") {
+          toast.error("Approve the architecture model before regenerating documents.");
+          router.push(`/projects/${project.id}/resolve`);
+          return;
+        }
+      }
       if (!res.ok) throw new Error();
       toast.success("Document regenerated!");
       router.refresh();

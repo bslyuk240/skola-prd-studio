@@ -41,4 +41,16 @@ describe("architecture resolution", () => {
       isBlueprintModelApproved(seed, [{ status: "ready", content: "Generated PRD" }])
     ).toBe(true);
   });
+
+  it("grandfathers projects missing a stored blueprint when documents exist", () => {
+    expect(
+      isBlueprintModelApproved(null, [{ status: "ready", content: "Generated PRD" }])
+    ).toBe(true);
+  });
+
+  it("blocks new projects until architecture is explicitly approved", () => {
+    const seed = buildBlueprintSeedFromWizard(ctx);
+    expect(isBlueprintModelApproved(seed, [{ status: "pending", content: null }])).toBe(false);
+    expect(isBlueprintModelApproved(null, [{ status: "pending", content: null }])).toBe(false);
+  });
 });

@@ -6,15 +6,21 @@ import type { ProjectContext } from "@/lib/ai-prompts";
 
 type AssumptionEntry = z.infer<typeof assumptionEntrySchema>;
 
+function hasLegacyGeneratedDocuments(
+  documents: Array<{ status: string | null; content?: string | null }>
+): boolean {
+  return documents.some(
+    (doc) => Boolean(doc.content?.trim()) || (doc.status !== null && doc.status !== "pending")
+  );
+}
+
 export function isBlueprintModelApproved(
   blueprint: ProjectBlueprint | null | undefined,
   documents: Array<{ status: string | null; content?: string | null }> = []
 ): boolean {
-  if (!blueprint) return false;
-  if (blueprint.metadata.modelApprovedAt) return true;
-  return documents.some(
-    (doc) => Boolean(doc.content?.trim()) || (doc.status !== null && doc.status !== "pending")
-  );
+  if (blueprint?.metadata.modelApprovedAt) return true;
+  if (hasLegacyGeneratedDocuments(documents)) return true;
+  return false;
 }
 
 export function approveBlueprintModel(blueprint: ProjectBlueprint): ProjectBlueprint {

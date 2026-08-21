@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { DocumentsClient } from "@/components/documents/documents-client";
 import { revertStaleBlueprintDocs } from "@/lib/generation-status";
-import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { getProjectBlueprint, ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import { buildIntegrityReport } from "@/lib/blueprint-engine/integrity-report";
 import { isBlueprintModelApproved } from "@/lib/blueprint-engine/apply-architecture-resolution";
 import {
@@ -34,8 +34,12 @@ export default async function DocumentsPage({ params }: Props) {
 
   const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
 
-  const blueprint = await getProjectBlueprint(project);
-  if (blueprint && !isBlueprintModelApproved(blueprint, docs)) {
+  let blueprint = await getProjectBlueprint(project);
+  if (!blueprint) {
+    blueprint = await ensureProjectBlueprint(project);
+  }
+
+  if (!isBlueprintModelApproved(blueprint, docs)) {
     redirect(`/projects/${projectId}/resolve`);
   }
 

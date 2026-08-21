@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { projects, documents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { getProjectBlueprint, ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import {
   isBlueprintModelApproved,
   wizardStackFromBlueprint,
@@ -29,8 +29,10 @@ export default async function ArchitectureResolutionPage({ params }: Props) {
 
   const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
 
-  const blueprint = await getProjectBlueprint(project);
-  if (!blueprint) notFound();
+  let blueprint = await getProjectBlueprint(project);
+  if (!blueprint) {
+    blueprint = await ensureProjectBlueprint(project);
+  }
 
   if (isBlueprintModelApproved(blueprint, docs)) {
     redirect(`/projects/${projectId}/documents`);

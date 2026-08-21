@@ -6,7 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { generateProjectDocument } from "@/lib/generate-project-document";
 import { triggerBackground } from "@/lib/trigger-background";
-import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { getProjectBlueprint, ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import { isBlueprintModelApproved } from "@/lib/blueprint-engine/apply-architecture-resolution";
 import { projectDocumentTypeSchema } from "@/lib/project-document-types";
 
@@ -41,10 +41,17 @@ export async function POST(req: NextRequest) {
     .from(documents)
     .where(eq(documents.projectId, projectId));
 
-  const blueprint = await getProjectBlueprint(project);
+  let blueprint = await getProjectBlueprint(project);
+  if (!blueprint) {
+    blueprint = await ensureProjectBlueprint(project);
+  }
+
   if (!isBlueprintModelApproved(blueprint, projectDocs)) {
     return NextResponse.json(
-      { error: "Approve the architecture model before generating documents" },
+      {
+        error: "Approve the architecture model before generating documents",
+        code: "BLUEPRINT_NOT_APPROVED",
+      },
       { status: 403 }
     );
   }

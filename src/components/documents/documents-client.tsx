@@ -90,6 +90,14 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id, documentType: docType }),
       });
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        if (data.code === "BLUEPRINT_NOT_APPROVED") {
+          toast.error("Approve the architecture model before generating documents.");
+          router.push(`/projects/${project.id}/resolve`);
+          return;
+        }
+      }
       if (!res.ok) throw new Error();
 
       if (res.status === 202) {
