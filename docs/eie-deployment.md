@@ -62,12 +62,22 @@ Without `TAVILY_API_KEY` or `SERPER_API_KEY`, enrichment falls back to LLM-sugge
 
 ## R2 / S3 bucket setup (manual)
 
-Create a bucket for admin file uploads. Example Cloudflare R2 CORS config:
+Create a bucket for admin file uploads. **CORS is required** for browser uploads from your Netlify site.
+
+Apply automatically (uses `EIE_STORAGE_*` and `NEXT_PUBLIC_APP_URL` from `.env.local`):
+
+```bash
+npm run eie:configure-r2-cors
+```
+
+Or set manually in Cloudflare R2 → bucket → **Settings → CORS policy**:
+
+> **Important:** Origins must match exactly — no trailing slash. Use `https://skola-prd.netlify.app`, not `https://skola-prd.netlify.app/`.
 
 ```json
 [
   {
-    "AllowedOrigins": ["https://your-app.netlify.app"],
+    "AllowedOrigins": ["https://skola-prd.netlify.app", "http://localhost:3000"],
     "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
     "AllowedHeaders": ["*"],
     "ExposeHeaders": ["ETag"],

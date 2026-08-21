@@ -193,7 +193,9 @@ export function ConnectionsClient({ status }: Props) {
         `EIE_STORAGE_SECRET_KEY=${status.storage.secretKey ? "••••••••••••••••" : "<not set>"}`,
       ].join("\n"),
       optional: true,
-      warning: "All four EIE_STORAGE_* variables are required for file uploads.",
+      warning: storageReady
+        ? "Run npm run eie:configure-r2-cors once so browser uploads work from your Netlify origin."
+        : "All four EIE_STORAGE_* variables are required for file uploads.",
       link: { href: "https://dash.cloudflare.com", label: "Cloudflare dashboard" },
     },
   ];

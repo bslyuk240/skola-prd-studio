@@ -170,6 +170,13 @@ export function SourceIngestionForm() {
       method: "PUT",
       headers: { "Content-Type": mimeType },
       body: file,
+    }).catch((error: unknown) => {
+      if (error instanceof TypeError) {
+        throw new Error(
+          "Upload blocked by R2 CORS. In Cloudflare R2 → your bucket → Settings → CORS, allow PUT from https://skola-prd.netlify.app. Or run: npm run eie:configure-r2-cors"
+        );
+      }
+      throw error;
     });
 
     if (!putRes.ok) {

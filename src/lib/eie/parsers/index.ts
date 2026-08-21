@@ -31,7 +31,9 @@ const URL_TYPES = new Set([
   "book",
 ]);
 
-function resolveMediaFilename(mimeType: string | undefined): string {
+function resolveMediaFilename(fileKey: string, mimeType: string | undefined): string {
+  const fromKey = fileKey.split("/").pop();
+  if (fromKey) return fromKey;
   if (mimeType?.startsWith("audio/")) return "upload.m4a";
   if (mimeType?.includes("webm")) return "upload.webm";
   return "upload.mp4";
@@ -53,7 +55,7 @@ async function extractTextFromFile(
     const { transcribeMediaBuffer } = await import("@/lib/eie/transcription");
     return transcribeMediaBuffer(
       buffer,
-      resolveMediaFilename(mimeType),
+      resolveMediaFilename(source.fileKey, mimeType),
       mimeType ?? "video/mp4",
       credits
     );
@@ -80,7 +82,7 @@ async function extractTextFromFile(
     const { transcribeMediaBuffer } = await import("@/lib/eie/transcription");
     return transcribeMediaBuffer(
       buffer,
-      resolveMediaFilename(mimeType),
+      resolveMediaFilename(source.fileKey, mimeType),
       mimeType,
       credits
     );
