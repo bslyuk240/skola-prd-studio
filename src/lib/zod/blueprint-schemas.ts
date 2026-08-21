@@ -114,6 +114,9 @@ export const integrationDefinitionSchema = z.object({
   webhooks: z.boolean().default(false),
   retryPolicy: z.boolean().default(false),
   verified: z.boolean().default(false),
+  verificationStatus: z
+    .enum(["verified", "project_defined", "unverified"])
+    .optional(),
   failurePolicy: integrationFailurePolicySchema.optional(),
 });
 

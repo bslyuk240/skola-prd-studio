@@ -32,12 +32,12 @@ const DOC_META: Record<
   trd: { icon: FileText, label: "TRD", color: "text-violet-600", description: "Technical Requirements Document" },
   app_flow: { icon: Map, label: "App Flow", color: "text-cyan-600", description: "User journeys and screen flows" },
   ux_brief: { icon: Palette, label: "UI/UX Brief", color: "text-pink-600", description: "Design direction and component guidelines" },
-  backend_schema: { icon: Database, label: "Backend Schema", color: "text-orange-600", description: "Database tables, relationships, API endpoints" },
+  backend_schema: { icon: Database, label: "Backend Schema", color: "text-orange-600", description: "Database tables, relationships, and RLS policies" },
   implementation_plan: { icon: GitBranch, label: "Implementation Plan", color: "text-emerald-600", description: "Build phases and task breakdown" },
   security_blueprint: { icon: Shield, label: "Security Blueprint", color: "text-red-600", description: "Security controls and checklist" },
   api_integration_spec: { icon: Layers, label: "API & Integrations", color: "text-indigo-600", description: "API catalogue and integration specifications" },
-  testing_qa_plan: { icon: ClipboardCheck, label: "Testing & QA", color: "text-teal-600", description: "Test cases mapped to requirements" },
-  deployment_ops_plan: { icon: Rocket, label: "Deployment & Ops", color: "text-slate-600", description: "CI/CD, environments, and rollback runbooks" },
+  testing_qa_plan: { icon: ClipboardCheck, label: "Testing & QA", color: "text-teal-600", description: "Testing & Quality Assurance Plan with requirement traceability" },
+  deployment_ops_plan: { icon: Rocket, label: "Deployment & Ops", color: "text-slate-600", description: "Deployment & Operations Plan — CI/CD, monitoring, incidents, and runbooks" },
 };
 
 const STATUS_CONFIG = {
@@ -62,7 +62,7 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
 
   const ready = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const readinessScore = integrityReport.breakdown.overall;
-  const integrityPassed = integrityReport.status === "pass";
+  const integrityPassed = integrityReport.status === "pass" && readinessScore != null;
 
   async function pollDocStatus(docType: string): Promise<"ready" | "pending" | "timeout"> {
     for (let i = 0; i < 80; i++) {
@@ -183,11 +183,17 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
               ) : (
                 <AlertCircle className="w-4 h-4 text-amber-500" />
               )}
-              <p className={cn("text-3xl font-bold", scoreColor(readinessScore))}>{readinessScore}%</p>
+              <p className={cn("text-3xl font-bold", scoreColor(readinessScore))}>
+                {readinessScore == null ? "—" : `${readinessScore}%`}
+              </p>
             </div>
-            <Progress value={readinessScore} className="h-1.5" />
+            {readinessScore != null ? (
+              <Progress value={readinessScore} className="h-1.5" />
+            ) : null}
             <p className="text-xs text-muted-foreground mt-1.5">
-              {integrityReport.hasBlockingErrors
+              {integrityReport.breakdown.generationInProgress
+                ? "Generation in progress — validation runs after documents complete"
+                : integrityReport.hasBlockingErrors
                 ? `${integrityReport.errorCount} blocking ${integrityReport.errorCount === 1 ? "issue" : "issues"}`
                 : `${ready} of ${PROJECT_DOCUMENT_COUNT} documents ready`}
             </p>

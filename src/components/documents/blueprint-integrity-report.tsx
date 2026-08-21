@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { Document } from "@/db/schema";
 import type { ValidationIssue } from "@/lib/zod/blueprint-schemas";
 import type { IntegrityReport } from "@/lib/blueprint-engine/integrity-report";
+import type { CategoryValidationState } from "@/lib/blueprint-engine/validate/validation-lifecycle";
 import {
   INTEGRITY_CATEGORIES,
   issueAcceptable,
@@ -74,6 +75,37 @@ function severityBadge(issue: ValidationIssue) {
   );
 }
 
+function categoryStateBadge(state: CategoryValidationState) {
+  if (state === "pending") {
+    return (
+      <Badge variant="outline" className="text-muted-foreground border-border">
+        Pending
+      </Badge>
+    );
+  }
+  if (state === "fail") {
+    return (
+      <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
+        Fail
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">
+      Pass
+    </Badge>
+  );
+}
+
+function categoryScoreLabel(
+  score: number | null,
+  state: CategoryValidationState
+): string {
+  if (state === "pending") return "Pending validation";
+  if (score == null) return "Pending validation";
+  return `${score}%`;
+}
+
 export function BlueprintIntegrityReport({ projectId, report, documents }: Props) {
   const router = useRouter();
   const [selectedIssue, setSelectedIssue] = useState<ValidationIssue | null>(null);
@@ -131,21 +163,36 @@ export function BlueprintIntegrityReport({ projectId, report, documents }: Props
               </p>
             </div>
             <div className="text-right shrink-0">
-              <p className={cn("text-3xl font-bold", scoreColor(report.breakdown.overall))}>
-                {report.breakdown.overall}%
-              </p>
-              <p className="text-xs text-muted-foreground">Overall readiness</p>
+              {report.breakdown.overall == null ? (
+                <>
+                  <p className="text-sm font-semibold text-muted-foreground">Generation in progress</p>
+                  <p className="text-xs text-muted-foreground">Overall readiness</p>
+                </>
+              ) : (
+                <>
+                  <p className={cn("text-3xl font-bold", scoreColor(report.breakdown.overall))}>
+                    {report.breakdown.overall}%
+                  </p>
+                  <p className="text-xs text-muted-foreground">Overall readiness</p>
+                </>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
             {INTEGRITY_CATEGORIES.map(({ key, label, breakdownKey }) => {
               const score = report.breakdown[breakdownKey];
+              const state = report.breakdown.categoryStates[breakdownKey];
               return (
                 <div key={key} className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                  <p className={cn("text-sm font-semibold", scoreColor(score))}>{score}%</p>
-                  <Progress value={score} className="h-1 mt-2" />
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    {categoryStateBadge(state)}
+                  </div>
+                  <p className={cn("text-sm font-semibold", scoreColor(score))}>
+                    {categoryScoreLabel(score, state)}
+                  </p>
+                  {score != null ? <Progress value={score} className="h-1 mt-2" /> : null}
                 </div>
               );
             })}

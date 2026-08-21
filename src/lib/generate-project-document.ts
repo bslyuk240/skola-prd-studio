@@ -96,9 +96,11 @@ export async function generateProjectDocument(
     .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
 
   const allDocs = await db.select().from(documents).where(eq(documents.projectId, projectId));
-  let docSnapshots: DocumentSnapshot[] = allDocs
-    .filter((d) => d.content)
-    .map((d) => ({ type: d.type, content: d.content! }));
+  let docSnapshots: DocumentSnapshot[] = allDocs.map((d) => ({
+    type: d.type,
+    content: d.content ?? "",
+    status: d.status,
+  }));
 
   const criticResult = await runArchitectCritic({
     blueprint: blueprintModel,
@@ -143,7 +145,16 @@ export async function generateProjectDocument(
       );
   }
 
-  docSnapshots = sanitizedCriticDocs.documents.filter((d) => d.content?.trim());
+  docSnapshots = sanitizedCriticDocs.documents
+    .filter((d) => d.content?.trim())
+    .map((d) => {
+      const row = allDocs.find((doc) => doc.type === d.type);
+      return {
+        type: d.type,
+        content: d.content,
+        status: row?.status ?? "ready",
+      };
+    });
 
   const securityCheckRows = await db
     .select()
@@ -203,8 +214,8 @@ export async function generateProjectDocument(
   const ready = refreshedDocs.filter(
     (d) => d.status === "ready" || d.status === "approved"
   ).length;
-  const readinessScore = breakdown.overall;
-  const securityScore = breakdown.security;
+  const readinessScore = breakdown.overall ?? project.readinessScore ?? 0;
+  const securityScore = breakdown.security ?? project.securityScore ?? 0;
 
   await saveProjectBlueprint(projectId, blueprintModel, breakdown);
 

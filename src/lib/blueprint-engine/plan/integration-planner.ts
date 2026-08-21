@@ -12,8 +12,8 @@ import {
   type FeatureApiClassification,
 } from "@/lib/blueprint-engine/plan/feature-api-classifier";
 import {
+  classifyIntegration,
   getServiceCapability,
-  requiresVerification,
   resolveServiceKey,
 } from "@/lib/blueprint-engine/registry/capabilities";
 
@@ -173,7 +173,9 @@ function enrichIntegrations(integrations: IntegrationDefinition[]): IntegrationD
       id: integration.id || nextStableId("INT", index),
       webhooks: integration.webhooks || Boolean(capability?.supportsWebhooks),
       retryPolicy: integration.retryPolicy || failurePolicy.maxRetries > 0,
-      verified: integration.verified ?? !requiresVerification(integration.name),
+      verified: integration.verified ?? classifyIntegration(integration.name).verified,
+      verificationStatus:
+        integration.verificationStatus ?? classifyIntegration(integration.name).verificationStatus,
       failurePolicy,
     };
   });

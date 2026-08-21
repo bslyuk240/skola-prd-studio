@@ -139,7 +139,9 @@ export function ExportClient({
             <p className={cn("text-3xl font-bold", readyDocs === totalDocs ? "text-emerald-600" : "text-amber-500")}>
               {readyDocs}/{totalDocs}
             </p>
-            <Progress value={readinessScore} className="h-1.5 mt-2" />
+            {readinessScore != null ? (
+              <Progress value={readinessScore} className="h-1.5 mt-2" />
+            ) : null}
             <p className="text-xs text-muted-foreground mt-1.5">
               {readyDocs === totalDocs ? "All ready to export" : `${totalDocs - readyDocs} still pending`}
             </p>

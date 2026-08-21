@@ -29,20 +29,28 @@ function looksLikeEntityTable(name: string): boolean {
 }
 
 export function validateStructuralCompleteness(
-  blueprint: ProjectBlueprint
+  blueprint: ProjectBlueprint,
+  options: {
+    validateEntityFields?: boolean;
+    validateIntegrations?: boolean;
+  } = {}
 ): ValidationIssue[] {
+  const validateEntityFields = options.validateEntityFields ?? true;
+  const validateIntegrations = options.validateIntegrations ?? true;
   const issues: ValidationIssue[] = [];
 
-  for (const entity of Object.values(blueprint.entities)) {
-    if (!entity.complete && entity.fields.length === 0) {
-      issues.push({
-        id: `STRUCT-entity-${entity.tableName}`,
-        severity: "warning",
-        category: "structural_completeness",
-        message: `Entity "${entity.tableName}" is referenced but has no complete field definition`,
-        resolution: "Add full table definition or mark entity as architectural preparation only",
-        documentTypes: [],
-      });
+  if (validateEntityFields) {
+    for (const entity of Object.values(blueprint.entities)) {
+      if (!entity.complete && entity.fields.length === 0) {
+        issues.push({
+          id: `STRUCT-entity-${entity.tableName}`,
+          severity: "warning",
+          category: "structural_completeness",
+          message: `Entity "${entity.tableName}" is referenced but has no complete field definition`,
+          resolution: "Add full table definition or mark entity as architectural preparation only",
+          documentTypes: [],
+        });
+      }
     }
   }
 
@@ -58,7 +66,7 @@ export function validateStructuralCompleteness(
         issues.push({
           id: `STRUCT-missing-${table}`,
           severity: "error",
-          category: "structural_completeness",
+          category: "model_completeness",
           message: `AI agent products require "${table}" in the canonical model`,
           resolution: `Add entities.${table} to the project blueprint`,
           documentTypes: [],
@@ -67,16 +75,31 @@ export function validateStructuralCompleteness(
     }
   }
 
-  for (const integration of blueprint.integrations) {
-    if (!integration.verified) {
-      issues.push({
-        id: `STRUCT-integration-${integration.id}`,
-        severity: "warning",
-        category: "integration_verification",
-        message: `Integration "${integration.name}" is not in the capability registry`,
-        resolution: "Verify provider capabilities or mark as VERIFICATION REQUIRED",
-        documentTypes: [],
-      });
+  if (validateIntegrations) {
+    for (const integration of blueprint.integrations) {
+      if (integration.verificationStatus === "project_defined") {
+        issues.push({
+          id: `STRUCT-integration-custom-${integration.id}`,
+          severity: "warning",
+          category: "integration_verification",
+          message: `Custom integration "${integration.name}" — capability definition required`,
+          resolution:
+            "Define what this integration will be used for in the API & Integration Specification",
+          documentTypes: ["api_integration_spec"],
+        });
+        continue;
+      }
+
+      if (!integration.verified) {
+        issues.push({
+          id: `STRUCT-integration-${integration.id}`,
+          severity: "warning",
+          category: "integration_verification",
+          message: `Integration "${integration.name}" is not in the capability registry`,
+          resolution: "Verify provider capabilities or mark as VERIFICATION REQUIRED",
+          documentTypes: [],
+        });
+      }
     }
   }
 

@@ -43,9 +43,11 @@ export default async function DocumentsPage({ params }: Props) {
     redirect(`/projects/${projectId}/resolve`);
   }
 
-  const snapshots = docs
-    .filter((doc) => doc.content)
-    .map((doc) => ({ type: doc.type, content: doc.content! }));
+  const snapshots = docs.map((doc) => ({
+    type: doc.type,
+    content: doc.content ?? "",
+    status: doc.status,
+  }));
 
   const securityCheckRows = await db
     .select()
@@ -66,8 +68,10 @@ export default async function DocumentsPage({ params }: Props) {
   await db
     .update(projects)
     .set({
-      readinessScore: integrityReport.breakdown.overall,
-      securityScore: integrityReport.breakdown.security,
+      ...(integrityReport.breakdown.overall != null
+        ? { readinessScore: integrityReport.breakdown.overall }
+        : {}),
+      securityScore: integrityReport.breakdown.security ?? project.securityScore ?? 0,
       readinessBreakdown: integrityReport.breakdown,
       updatedAt: new Date(),
     })

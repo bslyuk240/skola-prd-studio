@@ -26,7 +26,16 @@ describe("computeReadinessBreakdown", () => {
       },
     ];
 
-    const breakdown = computeReadinessBreakdown(blueprint, [], issues);
+    const breakdown = computeReadinessBreakdown(
+      blueprint,
+      [
+        { type: "app_flow", content: "Flow", status: "ready" },
+        { type: "backend_schema", content: "Schema", status: "ready" },
+        { type: "security_blueprint", content: "Security", status: "ready" },
+        { type: "api_integration_spec", content: "APIs", status: "ready" },
+      ],
+      issues
+    );
     expect(breakdown.overall).toBeLessThan(100);
     expect(breakdown.blockers).toContain("validation_errors");
   });
@@ -34,13 +43,20 @@ describe("computeReadinessBreakdown", () => {
   it("scores below 100 when open security todos remain", () => {
     const breakdown = computeReadinessBreakdown(
       blueprint,
-      [{ type: "security_blueprint", content: "Security controls listed." }],
+      [
+        { type: "app_flow", content: "Flow", status: "ready" },
+        { type: "backend_schema", content: "Schema", status: "ready" },
+        { type: "security_blueprint", content: "Security controls listed.", status: "ready" },
+        { type: "api_integration_spec", content: "API catalogue.", status: "ready" },
+      ],
       [],
       { openSecurityTodos: 3, totalSecurityTodos: 5 }
     );
 
-    expect(breakdown.security).toBeLessThan(100);
-    expect(breakdown.overall).toBeLessThan(100);
+    expect(breakdown.security).not.toBeNull();
+    expect(breakdown.security!).toBeLessThan(100);
+    expect(breakdown.overall).not.toBeNull();
+    expect(breakdown.overall!).toBeLessThan(100);
     expect(breakdown.blockers).toContain("open_security_todos");
   });
 
@@ -68,7 +84,14 @@ describe("computeReadinessBreakdown", () => {
       "backend_schema",
       "implementation_plan",
       "security_blueprint",
-    ].map((type) => ({ type, content: `Generated ${type} content.` }));
+      "api_integration_spec",
+      "testing_qa_plan",
+      "deployment_ops_plan",
+    ].map((type) => ({
+      type,
+      content: `Generated ${type} content.`,
+      status: "ready" as const,
+    }));
 
     const breakdown = computeReadinessBreakdown(completeBlueprint, docs, [], {
       openSecurityTodos: 0,
@@ -77,5 +100,20 @@ describe("computeReadinessBreakdown", () => {
 
     expect(breakdown.blockers).toHaveLength(0);
     expect(breakdown.overall).toBe(100);
+  });
+
+  it("returns null overall while generation is in progress", () => {
+    const breakdown = computeReadinessBreakdown(
+      blueprint,
+      [],
+      [],
+      {},
+      [{ type: "backend_schema", status: "generating", content: null }]
+    );
+
+    expect(breakdown.generationInProgress).toBe(true);
+    expect(breakdown.schema).toBeNull();
+    expect(breakdown.overall).toBeNull();
+    expect(breakdown.categoryStates.schema).toBe("pending");
   });
 });

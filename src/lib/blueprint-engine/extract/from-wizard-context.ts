@@ -1,7 +1,11 @@
 import type { ProjectContext } from "@/lib/ai-prompts";
 import type { ProjectBlueprint } from "@/lib/zod/blueprint-schemas";
 import { projectBlueprintSchema } from "@/lib/zod/blueprint-schemas";
-import { getServiceCapability, requiresVerification } from "@/lib/blueprint-engine/registry/capabilities";
+import {
+  classifyIntegration,
+  getServiceCapability,
+  splitIntegrationValues,
+} from "@/lib/blueprint-engine/registry/capabilities";
 import { finalizeBlueprint } from "@/lib/blueprint-engine/plan/finalize-blueprint";
 
 function parseRoles(raw: string | undefined): Record<string, { description: string }> {
@@ -44,28 +48,35 @@ export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBluepr
   const now = new Date();
   const hasAiAgents = inferAiAgents(ctx);
 
-  const integrations = [
+  const integrationNames = [
     ctx.authProvider,
     ctx.database,
     ctx.hostingProvider,
     ctx.fileStorage,
     ctx.paymentProvider,
-    ctx.integrationNeeds,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => value!.split(/[,;\n]/).map((v) => v.trim()))
-    .filter(Boolean)
-    .map((name, index) => ({
+    ...splitIntegrationValues(ctx.integrationNeeds),
+  ].flatMap((value) => (value ? splitIntegrationValues(value) : []));
+
+  const uniqueIntegrationNames = [...new Set(integrationNames)];
+
+  const integrations = uniqueIntegrationNames.map((name, index) => {
+    const classification = classifyIntegration(name);
+    return {
       id: `INT-${String(index + 1).padStart(3, "0")}`,
       name,
-      category: "service",
-      purpose: `Integration with ${name}`,
+      category: classification.category,
+      purpose:
+        classification.verificationStatus === "project_defined"
+          ? "Custom integration — capability definition required"
+          : `Integration with ${name}`,
       protocol: "HTTPS",
       direction: "outbound" as const,
       webhooks: false,
       retryPolicy: false,
-      verified: !requiresVerification(name),
-    }));
+      verified: classification.verified,
+      verificationStatus: classification.verificationStatus,
+    };
+  });
 
   const entities: ProjectBlueprint["entities"] = {};
 

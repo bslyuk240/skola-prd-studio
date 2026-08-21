@@ -13,13 +13,20 @@ import {
   type ReadinessScoreOptions,
 } from "@/lib/blueprint-engine/validate/compute-readiness-breakdown";
 import { codeSnippetIssuesFromContent } from "@/lib/blueprint-engine/validate/code-snippet-qa";
+import {
+  type DocumentWithStatus,
+  canValidateCategory,
+  filterIssuesForLifecycle,
+} from "@/lib/blueprint-engine/validate/validation-lifecycle";
 
 export type { ReadinessBreakdown } from "@/lib/blueprint-engine/validate/compute-readiness-breakdown";
 export type { ReadinessScoreOptions };
+export type { CategoryValidationState } from "@/lib/blueprint-engine/validate/validation-lifecycle";
 
 export type DocumentSnapshot = {
   type: string;
   content: string;
+  status?: string | null;
 };
 
 export function runBlueprintValidation(
@@ -27,8 +34,19 @@ export function runBlueprintValidation(
   documents: DocumentSnapshot[] = [],
   scoreOptions: ReadinessScoreOptions = {}
 ): { issues: ValidationIssue[]; breakdown: ReturnType<typeof computeReadinessBreakdown> } {
+  const documentsWithStatus: DocumentWithStatus[] = documents.map((doc) => ({
+    type: doc.type,
+    status: doc.status ?? (doc.content?.trim() ? "ready" : "pending"),
+    content: doc.content,
+  }));
+
+  const readyDocuments = documents.filter((doc) => doc.content?.trim());
+
   const issues: ValidationIssue[] = [
-    ...validateStructuralCompleteness(blueprint),
+    ...validateStructuralCompleteness(blueprint, {
+      validateEntityFields: canValidateCategory("schema", documentsWithStatus),
+      validateIntegrations: canValidateCategory("integrations", documentsWithStatus),
+    }),
     ...detectStackConflicts(blueprint.stack).map((message, index) => ({
       id: `STACK-${index}`,
       severity: "error" as const,
@@ -39,19 +57,26 @@ export function runBlueprintValidation(
     })),
   ];
 
-  for (const doc of documents) {
+  for (const doc of readyDocuments) {
     issues.push(...lintTerminology(blueprint, doc.content, doc.type).issues);
     issues.push(...validateEntityReferencesInText(blueprint, doc.content, doc.type));
     issues.push(...codeSnippetIssuesFromContent(doc.content, doc.type));
   }
 
-  if (documents.length > 0) {
-    issues.push(...validateDocumentConsistency(blueprint, documents));
-    issues.push(...validateWorkflowDocuments(blueprint, documents));
-    issues.push(...validateAiActionPolicy(blueprint, documents));
+  if (canValidateCategory("conflicts", documentsWithStatus) && readyDocuments.length > 0) {
+    issues.push(...validateDocumentConsistency(blueprint, readyDocuments));
+    issues.push(...validateWorkflowDocuments(blueprint, readyDocuments));
+    issues.push(...validateAiActionPolicy(blueprint, readyDocuments));
   }
 
-  const breakdown = computeReadinessBreakdown(blueprint, documents, issues, scoreOptions);
+  const lifecycleIssues = filterIssuesForLifecycle(issues, documentsWithStatus);
+  const breakdown = computeReadinessBreakdown(
+    blueprint,
+    documents,
+    lifecycleIssues,
+    scoreOptions,
+    documentsWithStatus
+  );
 
-  return { issues, breakdown };
+  return { issues: lifecycleIssues, breakdown };
 }

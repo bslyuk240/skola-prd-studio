@@ -321,19 +321,18 @@ Show ALL tables and ALL relationships.
    - Primary keys, foreign keys, unique constraints
    - Indexes
 
-4. API Endpoints (full REST CRUD for each resource):
-   - Method | Endpoint | Auth | Request Body | Response (markdown table)
+Do NOT include REST API routes or endpoint definitions in this document. API routes belong exclusively in the API & Integration Specification.
 
-5. Export & Download Data Access
+4. Export & Download Data Access
 ${EXPORT_SECURITY_REQUIREMENTS}
 
-6. Row Level Security (RLS) Policies — for each table, who can SELECT/INSERT/UPDATE/DELETE
+5. Row Level Security (RLS) Policies — for each table, who can SELECT/INSERT/UPDATE/DELETE
 
-7. File Storage Structure (if applicable)
+6. File Storage Structure (if applicable)
 
-8. Data Validation Rules (per field where important)
+7. Data Validation Rules (per field where important)
 
-9. Seed Data Recommendations
+8. Seed Data Recommendations
 
 Include SQL CREATE TABLE statements for the 3 most important tables.`,
 

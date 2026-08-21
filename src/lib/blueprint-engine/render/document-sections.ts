@@ -42,7 +42,7 @@ export const DOCUMENT_SECTIONS: Record<
   ],
   app_flow: ["product", "roles", "workflows", "stateMachines", "classification"],
   ux_brief: ["product", "roles", "classification", "glossary"],
-  backend_schema: ["entities", "stack", "apis", "glossary", "permissions"],
+  backend_schema: ["entities", "stack", "glossary", "permissions"],
   implementation_plan: [
     "product",
     "stack",

@@ -29,19 +29,28 @@ export const INTEGRITY_CATEGORIES = [
 ];
 
 const EMPTY_BREAKDOWN: ReadinessBreakdown = {
-  schema: 0,
-  flow: 0,
-  conflicts: 0,
-  assumptions: 0,
-  security: 0,
-  integrations: 0,
-  rbac: 0,
-  documentCoverage: 0,
-  architecture: 0,
-  overall: 0,
+  schema: null,
+  flow: null,
+  conflicts: null,
+  assumptions: null,
+  security: null,
+  integrations: null,
+  rbac: null,
+  documentCoverage: null,
+  architecture: null,
+  overall: null,
   errorCount: 0,
   warningCount: 0,
   blockers: [],
+  categoryStates: {
+    schema: "pending",
+    flow: "pending",
+    conflicts: "pending",
+    assumptions: "pending",
+    security: "pending",
+    integrations: "pending",
+  },
+  generationInProgress: false,
 };
 
 export function resolveIntegrityStatus(errorCount: number, warningCount: number): IntegrityStatus {

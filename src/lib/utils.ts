@@ -26,7 +26,8 @@ export function formatRelative(date: Date | string) {
   return `${days}d ago`;
 }
 
-export function scoreColor(score: number) {
+export function scoreColor(score: number | null | undefined) {
+  if (score == null) return "text-muted-foreground";
   if (score >= 80) return "text-emerald-600";
   if (score >= 60) return "text-amber-500";
   return "text-red-500";

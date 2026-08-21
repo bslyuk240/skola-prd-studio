@@ -43,16 +43,29 @@ describe("integrity report", () => {
     expect(["pass", "warning"]).toContain(report.status);
   });
 
-  it("exposes category scores for all six dimensions", () => {
+  it("exposes category scores once source documents are ready", () => {
     const report = buildIntegrityReport(blueprint, [
-      { type: "security_blueprint", content: "Tenant isolation and RBAC policies." },
+      { type: "backend_schema", content: "Tables for users and agents.", status: "ready" },
+      { type: "app_flow", content: "Flow from PROPOSED to APPROVED.", status: "ready" },
+      { type: "security_blueprint", content: "Tenant isolation and RBAC policies.", status: "ready" },
+      { type: "api_integration_spec", content: "API catalogue.", status: "ready" },
     ]);
 
-    expect(report.breakdown.conflicts).toBeGreaterThan(0);
-    expect(report.breakdown.schema).toBeGreaterThanOrEqual(0);
-    expect(report.breakdown.security).toBeGreaterThan(0);
-    expect(report.breakdown.assumptions).toBeGreaterThan(0);
-    expect(report.breakdown.flow).toBeGreaterThan(0);
-    expect(report.breakdown.integrations).toBeGreaterThan(0);
+    expect(report.breakdown.conflicts).not.toBeNull();
+    expect(report.breakdown.schema).not.toBeNull();
+    expect(report.breakdown.security).not.toBeNull();
+    expect(report.breakdown.assumptions).not.toBeNull();
+    expect(report.breakdown.flow).not.toBeNull();
+    expect(report.breakdown.integrations).not.toBeNull();
+  });
+
+  it("defers schema scoring while backend_schema is generating", () => {
+    const report = buildIntegrityReport(blueprint, [
+      { type: "backend_schema", content: "", status: "generating" },
+    ]);
+
+    expect(report.breakdown.schema).toBeNull();
+    expect(report.breakdown.categoryStates.schema).toBe("pending");
+    expect(report.breakdown.overall).toBeNull();
   });
 });

@@ -86,10 +86,27 @@ describe("runBlueprintValidation", () => {
       {
         type: "backend_schema",
         content: "Uses approval_tasks and agent_runs throughout.",
+        status: "ready",
+      },
+      {
+        type: "app_flow",
+        content: "Uses approval_tasks throughout the flow.",
+        status: "ready",
+      },
+      {
+        type: "security_blueprint",
+        content: "Security controls for approval_tasks.",
+        status: "ready",
+      },
+      {
+        type: "api_integration_spec",
+        content: "POST /api/approval_requests",
+        status: "ready",
       },
     ]);
     expect(issues.some((i) => i.severity === "error")).toBe(true);
-    expect(breakdown.overall).toBeLessThanOrEqual(89);
+    expect(breakdown.overall).not.toBeNull();
+    expect(breakdown.overall!).toBeLessThanOrEqual(89);
   });
 
   it("requires tool_executions for AI products missing from model", () => {
