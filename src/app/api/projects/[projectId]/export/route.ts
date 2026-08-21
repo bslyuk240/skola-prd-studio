@@ -3,26 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, documents, buildTasks, securityChecks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { buildIntegrityReport } from "@/lib/blueprint-engine/integrity-report";
+import {
+  PROJECT_DOCUMENT_DEFINITIONS,
+  PROJECT_DOCUMENT_TITLES_BY_TYPE,
+} from "@/lib/project-document-types";
 
-const DOC_ORDER = [
-  "prd",
-  "trd",
-  "app_flow",
-  "ux_brief",
-  "backend_schema",
-  "implementation_plan",
-  "security_blueprint",
-] as const;
-
-const DOC_TITLES: Record<string, string> = {
-  prd: "Product Requirements Document",
-  trd: "Technical Requirements Document",
-  app_flow: "App Flow",
-  ux_brief: "UI/UX Design Brief",
-  backend_schema: "Backend Schema",
-  implementation_plan: "Implementation Plan",
-  security_blueprint: "Security Blueprint",
-};
+const DOC_ORDER = PROJECT_DOCUMENT_DEFINITIONS.map((doc) => doc.type);
+const DOC_TITLES = PROJECT_DOCUMENT_TITLES_BY_TYPE;
 
 interface Params {
   params: Promise<{ projectId: string }>;
@@ -34,6 +23,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const format = req.nextUrl.searchParams.get("format") ?? "markdown";
+  const forceExport = req.nextUrl.searchParams.get("force") === "true";
 
   const [project] = await db
     .select()
@@ -44,6 +34,25 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
   const tasks = await db.select().from(buildTasks).where(eq(buildTasks.projectId, projectId));
+
+  const blueprint = await getProjectBlueprint(project);
+  const snapshots = docs
+    .filter((doc) => doc.content)
+    .map((doc) => ({ type: doc.type, content: doc.content! }));
+  const integrityReport = buildIntegrityReport(blueprint, snapshots, {
+    allowExportWithErrors: forceExport,
+  });
+
+  if (!integrityReport.canExport) {
+    return NextResponse.json(
+      {
+        error: "Export blocked until all ERROR-level integrity issues are resolved",
+        errorCount: integrityReport.errorCount,
+        issues: integrityReport.issues.filter((issue) => issue.severity === "error"),
+      },
+      { status: 409 }
+    );
+  }
 
   const exportDate = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 

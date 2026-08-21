@@ -219,6 +219,9 @@ async function getProjectBlueprint(projectId: string) {
       trd: pick("trd"),
       backend_schema: pick("backend_schema"),
       security_blueprint: pick("security_blueprint"),
+      api_integration_spec: pick("api_integration_spec"),
+      testing_qa_plan: pick("testing_qa_plan"),
+      deployment_ops_plan: pick("deployment_ops_plan"),
     },
   };
 }

@@ -6,12 +6,15 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { generateProjectDocument } from "@/lib/generate-project-document";
 import { triggerBackground } from "@/lib/trigger-background";
+import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { isBlueprintModelApproved } from "@/lib/blueprint-engine/apply-architecture-resolution";
+import { projectDocumentTypeSchema } from "@/lib/project-document-types";
 
 export const maxDuration = 60;
 
 const schema = z.object({
   projectId: z.string().min(1),
-  documentType: z.enum(["prd", "trd", "app_flow", "ux_brief", "backend_schema", "implementation_plan", "security_blueprint"]),
+  documentType: projectDocumentTypeSchema,
 });
 
 export async function POST(req: NextRequest) {
@@ -32,6 +35,19 @@ export async function POST(req: NextRequest) {
     .limit(1);
 
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+
+  const projectDocs = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.projectId, projectId));
+
+  const blueprint = await getProjectBlueprint(project);
+  if (!isBlueprintModelApproved(blueprint, projectDocs)) {
+    return NextResponse.json(
+      { error: "Approve the architecture model before generating documents" },
+      { status: 403 }
+    );
+  }
 
   // Mark document as generating
   await db

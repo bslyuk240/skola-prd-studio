@@ -12,11 +12,16 @@
     "db:push": "drizzle-kit push",
     "db:apply-eie-metadata": "node scripts/apply-eie-draft-metadata.mjs",
     "db:apply-eie-source-credits": "node scripts/apply-eie-source-credits.mjs",
+    "db:apply-blueprint-model": "node scripts/apply-blueprint-model.mjs",
+    "db:apply-feature-blueprint-model": "node scripts/apply-feature-blueprint-model.mjs",
+    "db:apply-security-scan-model": "node scripts/apply-security-scan-model.mjs",
+    "db:apply-document-types": "node scripts/apply-document-types-migration.mjs",
     "eie:configure-r2-cors": "node scripts/configure-r2-cors.mjs",
     "eie:test-r2": "node scripts/test-r2-connection.mjs",
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:blueprint-engine": "vitest run src/lib/blueprint-engine"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1091.0",

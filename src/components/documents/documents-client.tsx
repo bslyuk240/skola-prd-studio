@@ -10,13 +10,24 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   FileText, Shield, Database, GitBranch, Map, Palette,
-  Loader2, RefreshCw, Eye, CheckCircle2, Clock, AlertCircle, Wand2, Download
+  Loader2, RefreshCw, Eye, CheckCircle2, Clock, AlertCircle, Wand2, Download,
+  Layers, ClipboardCheck, Rocket,
 } from "lucide-react";
 import { cn, scoreColor } from "@/lib/utils";
 import { isEieEnabledForProject } from "@/lib/eie/project-settings";
 import { ProjectEieSettings } from "@/components/eie/project-eie-settings";
+import { BlueprintIntegrityReport } from "@/components/documents/blueprint-integrity-report";
+import type { IntegrityReport } from "@/lib/blueprint-engine/integrity-report";
+import {
+  PROJECT_DOCUMENT_COUNT,
+  PROJECT_DOCUMENT_DEFINITIONS,
+  type ProjectDocumentType,
+} from "@/lib/project-document-types";
 
-const DOC_META: Record<string, { icon: React.ElementType; label: string; color: string; description: string }> = {
+const DOC_META: Record<
+  ProjectDocumentType,
+  { icon: React.ElementType; label: string; color: string; description: string }
+> = {
   prd: { icon: FileText, label: "PRD", color: "text-blue-600", description: "Product Requirements Document" },
   trd: { icon: FileText, label: "TRD", color: "text-violet-600", description: "Technical Requirements Document" },
   app_flow: { icon: Map, label: "App Flow", color: "text-cyan-600", description: "User journeys and screen flows" },
@@ -24,6 +35,9 @@ const DOC_META: Record<string, { icon: React.ElementType; label: string; color: 
   backend_schema: { icon: Database, label: "Backend Schema", color: "text-orange-600", description: "Database tables, relationships, API endpoints" },
   implementation_plan: { icon: GitBranch, label: "Implementation Plan", color: "text-emerald-600", description: "Build phases and task breakdown" },
   security_blueprint: { icon: Shield, label: "Security Blueprint", color: "text-red-600", description: "Security controls and checklist" },
+  api_integration_spec: { icon: Layers, label: "API & Integrations", color: "text-indigo-600", description: "API catalogue and integration specifications" },
+  testing_qa_plan: { icon: ClipboardCheck, label: "Testing & QA", color: "text-teal-600", description: "Test cases mapped to requirements" },
+  deployment_ops_plan: { icon: Rocket, label: "Deployment & Ops", color: "text-slate-600", description: "CI/CD, environments, and rollback runbooks" },
 };
 
 const STATUS_CONFIG = {
@@ -37,16 +51,18 @@ const STATUS_CONFIG = {
 interface Props {
   project: Project;
   documents: Document[];
+  integrityReport: IntegrityReport;
 }
 
-export function DocumentsClient({ project, documents }: Props) {
+export function DocumentsClient({ project, documents, integrityReport }: Props) {
   const router = useRouter();
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
   const [eiePhase, setEiePhase] = useState<Record<string, boolean>>({});
   const eieEnabled = isEieEnabledForProject(project);
 
   const ready = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
-  const readinessScore = Math.round((ready / 7) * 100);
+  const readinessScore = integrityReport.breakdown.overall;
+  const integrityPassed = integrityReport.status === "pass";
 
   async function pollDocStatus(docType: string): Promise<"ready" | "pending" | "timeout"> {
     for (let i = 0; i < 80; i++) {
@@ -116,12 +132,24 @@ export function DocumentsClient({ project, documents }: Props) {
           <p className="text-muted-foreground text-sm mt-0.5">{project.description}</p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/projects/${project.id}/export`}>
-            <Button variant="outline" className="gap-2">
+          {integrityReport.canExport ? (
+            <Link href={`/projects/${project.id}/export`}>
+              <Button variant="outline" className="gap-2">
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+            </Link>
+          ) : (
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled
+              title="Resolve blocking integrity errors before export"
+            >
               <Download className="w-4 h-4" />
               Export
             </Button>
-          </Link>
+          )}
           <Button onClick={generateAll} className="gap-2">
             <Wand2 className="w-4 h-4" />
             Generate All
@@ -129,25 +157,47 @@ export function DocumentsClient({ project, documents }: Props) {
         </div>
       </div>
 
+      {/* Integrity report */}
+      <BlueprintIntegrityReport
+        projectId={project.id}
+        report={integrityReport}
+        documents={documents}
+      />
+
       {/* Scores */}
       <div className="grid grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
         <Card>
           <CardContent className="p-5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Blueprint Readiness</p>
-            <p className={cn("text-3xl font-bold mb-2", scoreColor(readinessScore))}>{readinessScore}%</p>
+            <div className="flex items-center gap-2 mb-2">
+              {integrityPassed ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+              )}
+              <p className={cn("text-3xl font-bold", scoreColor(readinessScore))}>{readinessScore}%</p>
+            </div>
             <Progress value={readinessScore} className="h-1.5" />
-            <p className="text-xs text-muted-foreground mt-1.5">{ready} of 7 documents ready</p>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              {integrityReport.hasBlockingErrors
+                ? `${integrityReport.errorCount} blocking ${integrityReport.errorCount === 1 ? "issue" : "issues"}`
+                : `${ready} of ${PROJECT_DOCUMENT_COUNT} documents ready`}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Security Score</p>
-            <p className={cn("text-3xl font-bold mb-2", scoreColor(project.securityScore ?? 0))}>
-              {project.securityScore ?? 0}/100
+            <p className={cn("text-3xl font-bold mb-2", scoreColor(integrityReport.breakdown.security))}>
+              {integrityReport.breakdown.security}/100
             </p>
-            <Progress value={project.securityScore ?? 0} className="h-1.5" />
+            <Progress value={integrityReport.breakdown.security} className="h-1.5" />
             <p className="text-xs text-muted-foreground mt-1.5">
-              {(project.securityScore ?? 0) < 60 ? "Needs Review" : "Good"}
+              {integrityReport.breakdown.blockers.includes("open_security_todos")
+                ? "Open security todos remain"
+                : (integrityReport.breakdown.security) < 60
+                  ? "Needs Review"
+                  : "Good"}
             </p>
           </CardContent>
         </Card>
@@ -176,7 +226,8 @@ export function DocumentsClient({ project, documents }: Props) {
 
       {/* Document cards */}
       <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-        {Object.entries(DOC_META).map(([type, meta]) => {
+        {PROJECT_DOCUMENT_DEFINITIONS.map(({ type }) => {
+          const meta = DOC_META[type];
           const doc = documents.find((d) => d.type === type);
           const status = doc?.status ?? "pending";
           const statusCfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pending;

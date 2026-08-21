@@ -30,6 +30,9 @@ export const documentTypeEnum = pgEnum("document_type", [
   "backend_schema",
   "implementation_plan",
   "security_blueprint",
+  "api_integration_spec",
+  "testing_qa_plan",
+  "deployment_ops_plan",
 ]);
 
 export const documentStatusEnum = pgEnum("document_status", [
@@ -120,6 +123,8 @@ export const projects = pgTable("projects", {
   securityScore: integer("security_score").default(0),
   agentReadinessScore: integer("agent_readiness_score").default(0),
   wizardData: jsonb("wizard_data"),
+  blueprintModel: jsonb("blueprint_model"),
+  readinessBreakdown: jsonb("readiness_breakdown"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -336,8 +341,10 @@ export const repoConnections = pgTable("repo_connections", {
 export const featureRequests = pgTable("feature_requests", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
   repoConnectionId: uuid("repo_connection_id")
     .references(() => repoConnections.id, { onDelete: "cascade" }),
+  featureBlueprintModel: jsonb("feature_blueprint_model"),
   featureName: text("feature_name").notNull(),
   featureDescription: text("feature_description").notNull(),
   // Clarification answers
@@ -415,6 +422,7 @@ export const findingSeverityEnum = pgEnum("finding_severity", [
 export const securityScans = pgTable("security_scans", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
   // Reuse repo connection infra
   repoUrl: text("repo_url"),
   repoOwner: text("repo_owner"),
@@ -434,6 +442,8 @@ export const securityScans = pgTable("security_scans", {
   likelyGapCount: integer("likely_gap_count").default(0),
   needsReviewCount: integer("needs_review_count").default(0),
   recommendedCount: integer("recommended_count").default(0),
+  securityScanModel: jsonb("security_scan_model"),
+  validationReport: jsonb("validation_report"),
   // The generated Security Fix PRD content
   prdContent: text("prd_content"),
   agentPrompt: text("agent_prompt"),
@@ -449,6 +459,7 @@ export const securityFindings = pgTable("security_findings", {
     .notNull()
     .references(() => securityScans.id, { onDelete: "cascade" }),
   pack: text("pack").notNull(),           // which security pack generated this
+  remediationRequirementId: text("remediation_requirement_id"),
   title: text("title").notNull(),
   description: text("description").notNull(),
   confidence: findingConfidenceEnum("confidence").notNull(),

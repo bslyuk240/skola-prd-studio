@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, documents } from "@/db/schema";
 import { z } from "zod";
+import { buildBlueprintFromWizard } from "@/lib/blueprint-engine/extract/extract-blueprint-model";
+import type { ProjectContext } from "@/lib/ai-prompts";
+import { PROJECT_DOCUMENT_DEFINITIONS } from "@/lib/project-document-types";
 
 const schema = z.object({
   appName: z.string().min(1),
@@ -32,15 +35,7 @@ const schema = z.object({
   securityToggles: z.record(z.string(), z.boolean()).optional(),
 });
 
-const DOC_TYPES = [
-  { type: "prd" as const, title: "Product Requirements Document" },
-  { type: "trd" as const, title: "Technical Requirements Document" },
-  { type: "app_flow" as const, title: "App Flow" },
-  { type: "ux_brief" as const, title: "UI/UX Design Brief" },
-  { type: "backend_schema" as const, title: "Backend Schema" },
-  { type: "implementation_plan" as const, title: "Implementation Plan" },
-  { type: "security_blueprint" as const, title: "Security Blueprint" },
-];
+const DOC_TYPES = PROJECT_DOCUMENT_DEFINITIONS;
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -51,6 +46,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const data = parsed.data;
+  const blueprintSeed = buildBlueprintFromWizard(data as ProjectContext);
 
   const [project] = await db
     .insert(projects)
@@ -74,6 +70,7 @@ export async function POST(req: NextRequest) {
         payment: data.paymentProvider,
       },
       wizardData: data,
+      blueprintModel: blueprintSeed,
     })
     .returning();
 

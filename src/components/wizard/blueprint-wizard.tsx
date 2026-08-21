@@ -47,7 +47,7 @@ const STEPS = [
   { id: 2, label: "Stack Choices" },
   { id: 3, label: "Product Structure" },
   { id: 4, label: "Security Level" },
-  { id: 5, label: "Generate Blueprint" },
+  { id: 5, label: "Architecture Review" },
 ];
 
 const DEFAULT_DATA: WizardData = {
@@ -119,8 +119,8 @@ export function BlueprintWizard({ defaultSecurityLevel, defaultSecurityToggles }
       });
       if (!res.ok) throw new Error("Failed to create project");
       const { projectId } = await res.json();
-      toast.success("Blueprint created! Generating documents…");
-      router.push(`/projects/${projectId}/documents`);
+      toast.success("Project created — review architecture next");
+      router.push(`/projects/${projectId}/resolve`);
     } catch (err) {
       toast.error("Something went wrong. Please try again.");
     } finally {

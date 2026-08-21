@@ -149,3 +149,68 @@ Specifically:
 - Forbid fake testimonials and placeholder personas like "Sarah Chen"
 - Require button labels to follow verb+noun pattern
 - Specify easing curves for all transitions (not just "smooth transition")
+
+---
+
+## Blueprint Engine Conventions
+
+Code under `src/lib/blueprint-engine/` powers canonical project, feature, and security-fix generation. Follow these rules when extending the engine.
+
+### Canonical model first
+
+- Wizard input seeds a `ProjectBlueprint` via `buildBlueprintSeedFromWizard()` in `extract/from-wizard-context.ts`.
+- `finalizeBlueprint()` applies glossary, integration/API plan, QA/Ops plan, stack lock, and AI tool policies — do not skip this step.
+- Persist approved models on `projects.blueprint_model` (JSON). Documents are render outputs of the model, not independent sources of truth.
+
+### Document types (10)
+
+- Single source of truth: `src/lib/project-document-types.ts` and `render/document-sections.ts`.
+- New document types require: Zod enum in `src/db/schema.ts`, migration script, placeholder rows on project create, export/UI lists, and readiness breakdown weights.
+
+### Generation pipeline
+
+Order in `generate-project-document.ts`:
+
+1. `renderDocument()` — prompt from model + section bindings
+2. LLM generation (OpenRouter)
+3. `enforceTerminologyInText()` + `enforceStackLockInText()`
+4. `stripInvalidCodeSnippets()` / `sanitizeDocumentsCodeSnippets()`
+5. `runArchitectCritic()` — patch model + regen drifted docs (max iterations capped)
+6. `runBlueprintValidation()` — terminology, consistency, state machines, structural completeness, readiness breakdown
+
+Feature and security-fix flows mirror this pattern with their own models (`FeatureBlueprint`, `SecurityScanModel`).
+
+### Validation categories
+
+| Category | Module | Blocks export |
+|----------|--------|---------------|
+| terminology | `validate/terminology-lint.ts` | errors yes |
+| consistency | `validate/consistency-validator.ts` | errors yes |
+| state_machine | `validate/state-machine-validator.ts` | errors yes |
+| code_snippets | `validate/code-snippet-qa.ts` | warnings only |
+| structural | `validate/structural-completeness.ts` | errors yes |
+
+### Terminology registry
+
+- Canonical table/entity names live in `blueprint.glossary` and `blueprint.entities`.
+- Never invent alternate names (`approval_tasks`, `agent_runs`) — add rejected synonyms to glossary and let the critic expand coverage.
+- Prompts include `serializeBlueprintForPrompt()` blocks with explicit “do not invent alternate table names” instructions.
+
+### Tests
+
+- Run `npm run test:blueprint-engine` before PRs that touch the engine.
+- Golden fixture: `__tests__/fixtures/ai-agent-saas-golden.ts` — AI agent SaaS wizard → expected model shape.
+- Pipeline integration: `pipeline-integration.test.ts` — full post-LLM path with mocked `generateDocument`.
+- Consistency regressions: `consistency-validator-regression.test.ts` — pairwise doc checks must stay green.
+- CI: `.github/workflows/blueprint-engine-ci.yml` runs the suite on every PR.
+
+### Migrations (Neon)
+
+Apply in order when schema changes:
+
+```bash
+npm run db:apply-blueprint-model
+npm run db:apply-feature-blueprint-model
+npm run db:apply-security-scan-model
+npm run db:apply-document-types
+```

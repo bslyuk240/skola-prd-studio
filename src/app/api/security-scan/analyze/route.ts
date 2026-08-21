@@ -1,14 +1,23 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { securityScans, securityFindings, userPreferences } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { securityScans, securityFindings, userPreferences, projects } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import { scanGithubRepo, redactSecrets, type DetectedStack } from "@/lib/github-scanner";
 import { runSecurityAnalysis } from "@/lib/security-scanner";
 import { buildSecurityPrdPrompt } from "@/lib/security-prd-prompt";
 import { generateText, DEFAULT_MODEL } from "@/lib/openrouter";
 import { SECURITY_SCAN_CREDITS } from "@/lib/credits";
 import { z } from "zod";
+import {
+  assignRemediationRequirementIds,
+  buildSecurityScanModel,
+} from "@/lib/blueprint-engine/plan/security-remediation-planner";
+import {
+  getLinkedProjectBlueprintForScan,
+  getProjectSecurityBlueprintContent,
+  validateSecurityFixPrd,
+} from "@/lib/blueprint-engine/security-scan-service";
 
 export const maxDuration = 60;
 
@@ -18,9 +27,9 @@ const schema = z.object({
   branch: z.string().optional(),
   accessToken: z.string().optional(),
   manualContext: z.string().optional(),
+  projectId: z.string().uuid().optional(),
 });
 
-// Files we want to read content from for deep security analysis
 const SECURITY_SENSITIVE_FILES = [
   "middleware.ts", "middleware.js",
   "src/middleware.ts", "src/middleware.js",
@@ -42,11 +51,22 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { provider, repoUrl, branch = "main", accessToken, manualContext } = parsed.data;
+  const { provider, repoUrl, branch = "main", accessToken, manualContext, projectId } = parsed.data;
 
-  // Create scan record
+  if (projectId) {
+    const [linkedProject] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+      .limit(1);
+    if (!linkedProject) {
+      return NextResponse.json({ error: "Linked project not found" }, { status: 404 });
+    }
+  }
+
   const [scan] = await db.insert(securityScans).values({
     userId,
+    projectId: projectId ?? null,
     repoUrl: repoUrl ?? null,
     branch,
     accessToken: accessToken ?? null,
@@ -67,7 +87,6 @@ export async function POST(req: NextRequest) {
       paths = scanResult.fileTree.map((f) => f.path);
       fileContent = scanResult.keyFilesContent;
       detectedStack = scanResult.detectedStack;
-      // Generate project summary via AI
       const summaryCtx = Object.entries(scanResult.keyFilesContent)
         .map(([f, c]) => `--- ${f} ---\n${c}`)
         .join("\n")
@@ -88,7 +107,6 @@ export async function POST(req: NextRequest) {
       }).where(eq(securityScans.id, scan.id));
 
     } else {
-      // Manual context — build a pseudo stack from the text
       const ctx = manualContext ?? "";
       detectedStack = inferStackFromText(ctx);
       paths = inferPathsFromText(ctx);
@@ -103,16 +121,17 @@ export async function POST(req: NextRequest) {
       }).where(eq(securityScans.id, scan.id));
     }
 
-    // Run security analysis
     await db.update(securityScans).set({ status: "analyzed", updatedAt: new Date() }).where(eq(securityScans.id, scan.id));
     const { findings, appliedPacks, safeToShipScore } = runSecurityAnalysis(detectedStack!, paths, fileContent);
+    const findingsWithIds = assignRemediationRequirementIds(findings);
+    const scanModel = buildSecurityScanModel(findingsWithIds, safeToShipScore, projectId ?? null);
 
-    // Store findings
-    if (findings.length > 0) {
+    if (findingsWithIds.length > 0) {
       await db.insert(securityFindings).values(
-        findings.map((f) => ({
+        findingsWithIds.map((f) => ({
           scanId: scan.id,
           pack: f.pack,
+          remediationRequirementId: f.remediationRequirementId,
           title: f.title,
           description: f.description,
           confidence: f.confidence,
@@ -124,7 +143,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update scan with counts
     const confirmed = findings.filter((f) => f.confidence === "confirmed").length;
     const likelyGap = findings.filter((f) => f.confidence === "likely_gap").length;
     const needsReview = findings.filter((f) => f.confidence === "needs_review").length;
@@ -137,11 +155,11 @@ export async function POST(req: NextRequest) {
       likelyGapCount: likelyGap,
       needsReviewCount: needsReview,
       recommendedCount: recommended,
+      securityScanModel: scanModel,
       status: "generating_prd",
       updatedAt: new Date(),
     }).where(eq(securityScans.id, scan.id));
 
-    // Generate Security Fix PRD
     const [userPrefs] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1);
     const model = userPrefs?.aiModel === "google/gemini-2.0-flash-001"
       ? DEFAULT_MODEL
@@ -149,22 +167,34 @@ export async function POST(req: NextRequest) {
 
     const prdPrompt = buildSecurityPrdPrompt(
       repoDisplayName,
-      detectedStack,
-      findings,
+      detectedStack!,
+      findingsWithIds,
       appliedPacks,
       safeToShipScore,
-      projectSummary
+      projectSummary,
+      scanModel
     );
 
     const prdContent = await generateText(prdPrompt, model);
 
-    // Extract the AI agent prompt section from the PRD
     const agentPromptMatch = prdContent.match(/##\s*12\..*?Suggested AI Agent Prompt[\s\S]*?```(?:markdown|text|prompt)?\n([\s\S]*?)```/i);
     const agentPrompt = agentPromptMatch ? agentPromptMatch[1].trim() : "";
+
+    const linkedBlueprint = await getLinkedProjectBlueprintForScan(projectId ?? null, userId);
+    const securityBlueprintContent = projectId
+      ? await getProjectSecurityBlueprintContent(projectId)
+      : null;
+    const validationReport = validateSecurityFixPrd(
+      scanModel,
+      prdContent,
+      linkedBlueprint,
+      securityBlueprintContent
+    );
 
     await db.update(securityScans).set({
       prdContent,
       agentPrompt,
+      validationReport,
       aiCreditsUsed: SECURITY_SCAN_CREDITS,
       status: "complete",
       updatedAt: new Date(),
@@ -178,6 +208,9 @@ export async function POST(req: NextRequest) {
       needsReviewCount: needsReview,
       recommendedCount: recommended,
       appliedPacks,
+      validationStatus: validationReport.status,
+      validationWarnings: validationReport.warningCount,
+      missingConfirmedFindings: validationReport.confirmedCoverage.missingRequirementIds,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

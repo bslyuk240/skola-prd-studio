@@ -14,6 +14,10 @@ import {
   Database, Map, Palette, Layers, ExternalLink,
 } from "lucide-react";
 import { cn, scoreColor } from "@/lib/utils";
+import type { IntegrityReport } from "@/lib/blueprint-engine/integrity-report";
+import {
+  PROJECT_DOCUMENT_COUNT,
+} from "@/lib/project-document-types";
 
 const DOC_META = [
   { key: "prd", icon: FileText, label: "Product Requirements Document", color: "text-blue-600", bg: "bg-blue-50" },
@@ -23,14 +27,17 @@ const DOC_META = [
   { key: "backend_schema", icon: Database, label: "Backend Schema", color: "text-orange-600", bg: "bg-orange-50" },
   { key: "implementation_plan", icon: GitBranch, label: "Implementation Plan", color: "text-emerald-600", bg: "bg-emerald-50" },
   { key: "security_blueprint", icon: Shield, label: "Security Blueprint", color: "text-red-600", bg: "bg-red-50" },
-];
+  { key: "api_integration_spec", icon: Layers, label: "API & Integration Specification", color: "text-indigo-600", bg: "bg-indigo-50" },
+  { key: "testing_qa_plan", icon: CheckCircle2, label: "Testing & QA Plan", color: "text-teal-600", bg: "bg-teal-50" },
+  { key: "deployment_ops_plan", icon: ExternalLink, label: "Deployment & Operations Plan", color: "text-slate-600", bg: "bg-muted" },
+] as const;
 
 const EXPORT_OPTIONS = [
   {
     id: "html",
     icon: FileCode,
     label: "Styled HTML Bundle",
-    description: "Self-contained HTML file with all 7 documents, rendered Mermaid diagrams (flowcharts, ERDs, Gantt), colour-coded tables, and a Print → Save PDF button. Best for sharing and archiving.",
+    description: `Self-contained HTML file with all ${PROJECT_DOCUMENT_COUNT} documents, rendered Mermaid diagrams (flowcharts, ERDs, Gantt), colour-coded tables, and a Print → Save PDF button. Best for sharing and archiving.`,
     badge: "Recommended",
     badgeClass: "bg-primary/10 text-primary border-primary/30",
     format: "html",
@@ -41,7 +48,7 @@ const EXPORT_OPTIONS = [
     id: "markdown",
     icon: FileText,
     label: "Markdown Bundle",
-    description: "All 7 documents in a single .md file. Mermaid diagram definitions included as code blocks — they render in GitHub, GitLab, Notion, Obsidian, and VS Code (with Mermaid extension).",
+    description: `All ${PROJECT_DOCUMENT_COUNT} documents in a single .md file. Mermaid diagram definitions included as code blocks — they render in GitHub, GitLab, Notion, Obsidian, and VS Code (with Mermaid extension).`,
     badge: "Universal",
     badgeClass: "bg-muted text-muted-foreground border-border",
     format: "markdown",
@@ -56,15 +63,33 @@ interface Props {
   readyDocs: number;
   totalTasks: number;
   doneTasks: number;
+  integrityReport: IntegrityReport;
 }
 
-export function ExportClient({ project, totalDocs, readyDocs, totalTasks, doneTasks }: Props) {
+export function ExportClient({
+  project,
+  totalDocs,
+  readyDocs,
+  totalTasks,
+  doneTasks,
+  integrityReport,
+}: Props) {
   const [downloading, setDownloading] = useState<string | null>(null);
 
   async function download(format: string, ext: string) {
+    if (!integrityReport.canExport) {
+      toast.error("Resolve blocking integrity errors before exporting.");
+      return;
+    }
+
     setDownloading(format);
     try {
       const res = await fetch(`/api/projects/${project.id}/export?format=${format}`);
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? "Export blocked by integrity errors.");
+        return;
+      }
       if (!res.ok) throw new Error("Export failed");
 
       const blob = await res.blob();
@@ -83,7 +108,8 @@ export function ExportClient({ project, totalDocs, readyDocs, totalTasks, doneTa
     }
   }
 
-  const readinessScore = Math.round((readyDocs / 7) * 100);
+  const readinessScore = integrityReport.breakdown.overall;
+  const exportBlocked = !integrityReport.canExport;
 
   return (
     <div className="p-8">
@@ -102,20 +128,20 @@ export function ExportClient({ project, totalDocs, readyDocs, totalTasks, doneTa
 
       {/* Readiness summary */}
       <div className="grid grid-cols-4 gap-4 mb-8">
-        <Card className={cn(readyDocs < 7 ? "border-amber-200 bg-amber-50/30" : "border-emerald-200 bg-emerald-50/30")}>
+        <Card className={cn(readyDocs < totalDocs ? "border-amber-200 bg-amber-50/30" : "border-emerald-200 bg-emerald-50/30")}>
           <CardContent className="p-5">
             <div className="flex items-center gap-2 mb-2">
-              {readyDocs === 7
+              {readyDocs === totalDocs
                 ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 : <Clock className="w-4 h-4 text-amber-500" />}
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Documents</span>
             </div>
-            <p className={cn("text-3xl font-bold", readyDocs === 7 ? "text-emerald-600" : "text-amber-500")}>
-              {readyDocs}/7
+            <p className={cn("text-3xl font-bold", readyDocs === totalDocs ? "text-emerald-600" : "text-amber-500")}>
+              {readyDocs}/{totalDocs}
             </p>
             <Progress value={readinessScore} className="h-1.5 mt-2" />
             <p className="text-xs text-muted-foreground mt-1.5">
-              {readyDocs === 7 ? "All ready to export" : `${7 - readyDocs} still pending`}
+              {readyDocs === totalDocs ? "All ready to export" : `${totalDocs - readyDocs} still pending`}
             </p>
           </CardContent>
         </Card>
@@ -144,12 +170,31 @@ export function ExportClient({ project, totalDocs, readyDocs, totalTasks, doneTa
         </Card>
       </div>
 
-      {readyDocs < 7 && (
+      {exportBlocked && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
           <Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-amber-800">
-              {7 - readyDocs} document{7 - readyDocs > 1 ? "s" : ""} not yet generated
+              Export blocked — {integrityReport.errorCount} integrity{" "}
+              {integrityReport.errorCount === 1 ? "error" : "errors"} remain
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Resolve conflicts on the{" "}
+              <Link href={`/projects/${project.id}/documents`} className="underline font-medium">
+                Documents
+              </Link>{" "}
+              page before downloading. Add <code className="font-mono">?force=true</code> to override via API only.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {readyDocs < totalDocs && !exportBlocked && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
+          <Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {totalDocs - readyDocs} document{totalDocs - readyDocs > 1 ? "s" : ""} not yet generated
             </p>
             <p className="text-xs text-amber-700 mt-0.5">
               You can still export now — pending documents will show a placeholder. Go to{" "}
@@ -185,7 +230,7 @@ export function ExportClient({ project, totalDocs, readyDocs, totalTasks, doneTa
               </div>
               <Button
                 onClick={() => download(format, ext)}
-                disabled={downloading !== null}
+                disabled={downloading !== null || exportBlocked}
                 className="w-full gap-2"
                 variant={id === "html" ? "default" : "outline"}
               >

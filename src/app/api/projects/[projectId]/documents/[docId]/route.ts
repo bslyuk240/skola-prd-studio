@@ -4,6 +4,11 @@ import { db } from "@/db";
 import { projects, documents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import {
+  runBlueprintValidation,
+  hasBlockingConsistencyErrors,
+} from "@/lib/blueprint-engine";
 
 const schema = z.object({
   status: z.enum(["pending", "generating", "ready", "approved", "needs_revision"]).optional(),
@@ -29,6 +34,53 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+
+  if (parsed.data.status === "approved") {
+    const blueprint = await getProjectBlueprint(project);
+    if (blueprint) {
+      const projectDocs = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.projectId, projectId));
+
+      const snapshots = projectDocs
+        .filter((document) => document.content)
+        .map((document) => ({
+          type: document.type,
+          content: document.content!,
+        }));
+
+      const { issues } = runBlueprintValidation(blueprint, snapshots);
+      if (hasBlockingConsistencyErrors(issues)) {
+        const blocking = issues.filter(
+          (issue) => issue.severity === "error" && issue.category === "consistency"
+        );
+        return NextResponse.json(
+          {
+            error: "Cannot approve document while consistency errors remain",
+            issues: blocking,
+          },
+          { status: 409 }
+        );
+      }
+
+      const workflowBlocking = issues.filter(
+        (issue) => issue.severity === "error" && issue.category === "state_machine"
+      );
+      const aiPolicyBlocking = issues.filter(
+        (issue) => issue.severity === "error" && issue.category === "ai_action_policy"
+      );
+      if (workflowBlocking.length > 0 || aiPolicyBlocking.length > 0) {
+        return NextResponse.json(
+          {
+            error: "Cannot approve document while workflow or AI policy errors remain",
+            issues: [...workflowBlocking, ...aiPolicyBlocking],
+          },
+          { status: 409 }
+        );
+      }
+    }
+  }
 
   await db
     .update(documents)

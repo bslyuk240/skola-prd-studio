@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SecurityScan, SecurityFinding } from "@/db/schema";
+import type { SecurityFixValidationReport } from "@/lib/blueprint-engine/validate/security-fix-validation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,6 +124,10 @@ export function SecurityReportClient({ scan, findings }: Props) {
   const score = scan.safeToShipScore ?? 0;
   const scoreMeta = scoreLabel(score);
   const stack = (scan.detectedStack as Record<string, string | string[]>) ?? {};
+  const validationReport = (scan.validationReport as SecurityFixValidationReport | null) ?? null;
+  const scanModel = scan.securityScanModel as {
+    scoreTarget?: { value: number; requiresValidation: boolean; statement: string };
+  } | null;
 
   const confirmed = findings.filter((f) => f.confidence === "confirmed");
   const likelyGaps = findings.filter((f) => f.confidence === "likely_gap");
@@ -250,8 +255,35 @@ export function SecurityReportClient({ scan, findings }: Props) {
                   {(scan.appliedPacks as string[])?.length ?? 0} security packs applied:{" "}
                   {((scan.appliedPacks as string[]) ?? []).join(", ")}
                 </p>
+                {scanModel?.scoreTarget?.requiresValidation && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Score classified as TARGET — re-scan required to validate {scanModel.scoreTarget.value}/100 after fixes.
+                  </p>
+                )}
               </div>
             </div>
+
+            {validationReport && validationReport.warningCount > 0 && (
+              <div className="border border-amber-200 bg-amber-50 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <p className="text-sm font-semibold text-amber-800">
+                    Security Fix PRD validation — {validationReport.warningCount} warning{validationReport.warningCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <p className="text-xs text-amber-800">
+                  Confirmed finding coverage: {validationReport.confirmedCoverage.covered}/
+                  {validationReport.confirmedCoverage.total} addressed in generated PRD.
+                </p>
+                <ul className="space-y-1.5">
+                  {validationReport.issues.slice(0, 6).map((issue) => (
+                    <li key={issue.id} className="text-xs text-amber-900">
+                      {issue.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Stats row */}
             <div className="grid grid-cols-4 gap-4">
@@ -325,6 +357,11 @@ export function SecurityReportClient({ scan, findings }: Props) {
                             <div className="flex items-center gap-3 min-w-0">
                               <div className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
                               <span className="text-sm font-semibold text-foreground truncate">{f.title}</span>
+                              {f.remediationRequirementId && (
+                                <Badge variant="outline" className="text-xs shrink-0 font-mono">
+                                  {f.remediationRequirementId}
+                                </Badge>
+                              )}
                               <Badge variant="outline" className={cn("text-xs shrink-0 capitalize", sevCfg)}>
                                 {f.severity}
                               </Badge>

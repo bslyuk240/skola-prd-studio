@@ -120,7 +120,7 @@ H. Verify Before You Ship
 `.trim();
 }
 
-export function buildPrompt(docType: string, ctx: ProjectContext): string {
+export function getDocumentInstructions(docType: string, ctx: ProjectContext): string {
   const context = baseContext(ctx);
 
   const prompts: Record<string, string> = {
@@ -349,9 +349,11 @@ gantt
   title ${ctx.appName} Implementation Plan
   dateFormat  YYYY-MM-DD
   section Phase 1 Setup
-    Project initialisation :a1, 2024-01-01, 2d
-    ...add all phases and tasks with realistic durations
+    Project initialisation :a1, 2026-01-01, 2d
+    ...add all phases and tasks with realistic durations from Week 1 onward — do NOT use 2024 dates
 \`\`\`
+
+Use relative week labels (Week 1, Week 2) unless the user provided a project start date.
 
 2. Detailed Phase Breakdown — for each phase:
 
@@ -478,4 +480,9 @@ Format in clean Markdown with all tables and diagrams included.`,
   };
 
   return prompts[docType] ?? `Generate a detailed ${docType} document for: ${ctx.appName}. Context: ${context}`;
+}
+
+/** @deprecated Prefer renderDocument(blueprint) from blueprint-engine for model-driven generation. */
+export function buildPrompt(docType: string, ctx: ProjectContext): string {
+  return getDocumentInstructions(docType, ctx);
 }

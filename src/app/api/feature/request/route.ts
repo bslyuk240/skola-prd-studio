@@ -1,8 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { featureRequests, featureDocuments } from "@/db/schema";
+import { featureRequests, featureDocuments, projects } from "@/db/schema";
 import { z } from "zod";
+import { eq, and, desc } from "drizzle-orm";
+import {
+  buildFeatureBlueprint,
+} from "@/lib/blueprint-engine/extract/build-feature-blueprint";
+import { saveFeatureBlueprint, getLinkedProjectBlueprint } from "@/lib/blueprint-engine/feature-blueprint-service";
 
 const FEATURE_DOC_TYPES = [
   { type: "feature_prd" as const, title: "Feature Requirements Document" },
@@ -18,6 +23,7 @@ const FEATURE_DOC_TYPES = [
 
 const schema = z.object({
   repoConnectionId: z.string().optional(),
+  projectId: z.string().uuid().optional(),
   featureName: z.string().min(1),
   featureDescription: z.string().min(1),
   affectedRoles: z.string().optional(),
@@ -39,11 +45,45 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
+  const { projectId, ...requestData } = parsed.data;
+
+  if (projectId) {
+    const [linkedProject] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+      .limit(1);
+    if (!linkedProject) {
+      return NextResponse.json({ error: "Linked project not found" }, { status: 404 });
+    }
+  }
+
   const [request] = await db.insert(featureRequests).values({
     userId,
-    ...parsed.data,
+    projectId: projectId ?? null,
+    ...requestData,
     status: "draft",
   }).returning();
+
+  const linkedProjectBlueprint = await getLinkedProjectBlueprint(projectId ?? null, userId);
+  const featureBlueprint = buildFeatureBlueprint(
+    {
+      linkedProjectId: projectId ?? null,
+      name: request.featureName,
+      description: request.featureDescription,
+      affectedRoles: request.affectedRoles ?? undefined,
+      affectsPermissions: request.affectsPermissions ?? false,
+      needsNewTables: request.needsNewTables ?? false,
+      needsNotifications: request.needsNotifications ?? false,
+      affectsDashboard: request.affectsDashboard ?? false,
+      mobileRequired: request.mobileRequired ?? false,
+      affectsBilling: request.affectsBilling ?? false,
+      scopeLevel: (request.scopeLevel as "mvp" | "full") ?? "mvp",
+      additionalContext: request.additionalContext ?? undefined,
+    },
+    linkedProjectBlueprint
+  );
+  await saveFeatureBlueprint(request.id, featureBlueprint);
 
   // Create placeholder feature documents
   await db.insert(featureDocuments).values(
@@ -70,6 +110,3 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(requests);
 }
-
-import { eq } from "drizzle-orm";
-import { desc } from "drizzle-orm";

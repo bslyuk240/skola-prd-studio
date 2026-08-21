@@ -3,7 +3,7 @@
 import { WizardData } from "../blueprint-wizard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileText, Shield, Database, GitBranch, Layers, Map, Palette } from "lucide-react";
+import { Loader2, FileText, Shield, Database, GitBranch, Layers, Map, Palette, ClipboardCheck, Rocket } from "lucide-react";
 
 const DOCS = [
   { icon: FileText, label: "Product Requirements Document" },
@@ -13,6 +13,9 @@ const DOCS = [
   { icon: Database, label: "Backend Schema" },
   { icon: GitBranch, label: "Implementation Plan" },
   { icon: Shield, label: "Security Blueprint" },
+  { icon: Layers, label: "API & Integration Specification" },
+  { icon: ClipboardCheck, label: "Testing & QA Plan" },
+  { icon: Rocket, label: "Deployment & Operations Plan" },
 ];
 
 interface Props {
@@ -29,8 +32,10 @@ export function StepReviewGenerate({ data, onBack, onGenerate, loading }: Props)
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-foreground mb-1">Review & Generate</h2>
-        <p className="text-muted-foreground text-sm">Review your project details before generating all 7 build documents.</p>
+        <h2 className="text-xl font-bold text-foreground mb-1">Review & Continue</h2>
+        <p className="text-muted-foreground text-sm">
+          Confirm wizard inputs, then review the interpreted architecture model before documents generate.
+        </p>
       </div>
 
       {/* Summary */}
@@ -95,7 +100,7 @@ export function StepReviewGenerate({ data, onBack, onGenerate, loading }: Props)
               Creating project…
             </>
           ) : (
-            "Generate Blueprint →"
+            "Review Architecture →"
           )}
         </Button>
       </div>

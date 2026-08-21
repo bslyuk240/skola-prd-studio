@@ -1,28 +1,36 @@
 import type { SecurityFinding } from "./security-scanner";
 import type { DetectedStack } from "./github-scanner";
+import type { FindingWithRemediationId } from "@/lib/blueprint-engine/plan/security-remediation-planner";
+import type { SecurityScanModel } from "@/lib/zod/blueprint-schemas";
 
 export function buildSecurityPrdPrompt(
   repoName: string,
   stack: DetectedStack,
-  findings: SecurityFinding[],
+  findings: Array<SecurityFinding | FindingWithRemediationId>,
   appliedPacks: string[],
   score: number,
-  projectSummary: string
+  projectSummary: string,
+  scanModel?: SecurityScanModel
 ): string {
   const confirmed = findings.filter((f) => f.confidence === "confirmed");
   const likelyGaps = findings.filter((f) => f.confidence === "likely_gap");
   const needsReview = findings.filter((f) => f.confidence === "needs_review");
   const recommended = findings.filter((f) => f.confidence === "recommended");
 
-  const findingsList = (items: SecurityFinding[]) =>
-    items.map((f) => `### ${f.title}
+  const findingsList = (items: Array<SecurityFinding | FindingWithRemediationId>) =>
+    items.map((f) => {
+      const remediationId =
+        "remediationRequirementId" in f && f.remediationRequirementId
+          ? f.remediationRequirementId
+          : undefined;
+      return `### ${remediationId ? `[${remediationId}] ` : ""}${f.title}
 **Severity:** ${f.severity.toUpperCase()}
 **Pack:** ${f.pack}
-**Description:** ${f.description}
+${remediationId ? `**Remediation Requirement ID:** ${remediationId}\n` : ""}**Description:** ${f.description}
 ${f.codeEvidence ? `**Evidence found:** \`${f.codeEvidence}\`` : ""}
 **Recommendation:** ${f.recommendation}
-${f.affectedFiles?.length ? `**Likely affected files:** ${f.affectedFiles.join(", ")}` : ""}`
-    ).join("\n\n");
+${f.affectedFiles?.length ? `**Likely affected files:** ${f.affectedFiles.join(", ")}` : ""}`;
+    }).join("\n\n");
 
   return `You are a senior application security engineer writing a Security Fix PRD. Generate a complete, actionable Security Remediation PRD based on the scan results below.
 
@@ -34,6 +42,7 @@ Reference framework: the Amospikins "AI Code Security Checklist v2.0" — 27 che
 
 PROJECT: ${repoName}
 SAFE TO SHIP SCORE: ${score}/100
+${scanModel ? `SCORE CLASSIFICATION: TARGET (requiresValidation=true) — post-remediation re-scan must validate score reaches ${scanModel.scoreTarget.value}/100` : ""}
 
 DETECTED STACK:
 ${Object.entries(stack).filter(([k, v]) => k !== "otherDeps" && v && v !== "Not detected").map(([k, v]) => `- ${k}: ${v}`).join("\n")}
@@ -57,6 +66,11 @@ ${needsReview.length ? findingsList(needsReview) : "None."}
 
 RECOMMENDED IMPROVEMENTS (${recommended.length}):
 ${recommended.length ? findingsList(recommended) : "None."}
+
+REMEDIATION REQUIREMENT RULES:
+- Every confirmed finding listed above has a remediation requirement ID (REM-001 format)
+- Sections 4, 8, 10, and 11 MUST reference each confirmed REM-* ID explicitly
+- Do not merge or omit confirmed findings — one remediation block per REM-* ID
 
 ---
 
