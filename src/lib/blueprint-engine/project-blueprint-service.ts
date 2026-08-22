@@ -6,10 +6,26 @@ import {
   projectBlueprintSchema,
   type ProjectBlueprint,
 } from "@/lib/zod/blueprint-schemas";
-import { buildBlueprintFromWizard } from "@/lib/blueprint-engine/extract/extract-blueprint-model";
+import { buildBlueprintSeedFromWizard } from "@/lib/blueprint-engine/extract/from-wizard-context";
 import { extractBlueprintModel } from "@/lib/blueprint-engine/extract/extract-blueprint-model";
 import { finalizeBlueprint } from "@/lib/blueprint-engine/plan/finalize-blueprint";
 import type { ReadinessBreakdown } from "@/lib/blueprint-engine/validate/readiness";
+
+function mergeSeedEntities(
+  existing: ProjectBlueprint,
+  ctx: ProjectContext
+): ProjectBlueprint {
+  const seed = buildBlueprintSeedFromWizard(ctx);
+  const entities = { ...existing.entities };
+
+  for (const [key, entity] of Object.entries(seed.entities)) {
+    if (!entities[key]) {
+      entities[key] = entity;
+    }
+  }
+
+  return { ...existing, entities };
+}
 
 function projectContextFromRow(project: typeof projects.$inferSelect): ProjectContext {
   const ctx = (project.wizardData ?? {}) as ProjectContext;
@@ -60,14 +76,15 @@ export async function ensureProjectBlueprint(
   const ctx = projectContextFromRow(project);
 
   if (existing && !options.enrichWithLlm) {
-    const finalized = finalizeBlueprint(existing, ctx);
+    const merged = mergeSeedEntities(existing, ctx);
+    const finalized = finalizeBlueprint(merged, ctx);
     await saveProjectBlueprint(project.id, finalized);
     return finalized;
   }
 
   const blueprint = options.enrichWithLlm
     ? finalizeBlueprint(await extractBlueprintModel(ctx, options.model), ctx)
-    : finalizeBlueprint(buildBlueprintFromWizard(ctx), ctx);
+    : finalizeBlueprint(buildBlueprintSeedFromWizard(ctx), ctx);
 
   await saveProjectBlueprint(project.id, blueprint);
   return blueprint;

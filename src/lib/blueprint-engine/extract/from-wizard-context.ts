@@ -43,6 +43,20 @@ function inferAsyncProcessing(ctx: ProjectContext): boolean {
   );
 }
 
+function inferSalesCrm(ctx: ProjectContext): boolean {
+  const haystack = [
+    ctx.shortDescription,
+    ctx.longDescription,
+    ctx.mainFeatures,
+    ctx.adminFeatures,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /\bsales\b|\bleads?\b|\bcrm\b|\bpipeline\b/i.test(haystack);
+}
+
 /** Deterministic first pass — LLM enrichment comes in Phase 1. */
 export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBlueprint {
   const now = new Date();
@@ -131,6 +145,16 @@ export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBluepr
       id: "ENT-approval_requests",
       tableName: "approval_requests",
       description: "Human approval gates for high-risk agent actions",
+      fields: [],
+      complete: false,
+    };
+  }
+
+  if (inferSalesCrm(ctx)) {
+    entities.leads = {
+      id: "ENT-leads",
+      tableName: "leads",
+      description: "Sales leads tracked by sales-facing agents",
       fields: [],
       complete: false,
     };

@@ -35,6 +35,9 @@ const ENUM_LIKE_TOKENS = new Set([
   "deleted",
   "open",
   "closed",
+  "status",
+  "state",
+  "type",
 ]);
 
 const TABLE_LIKE_SUFFIXES = [

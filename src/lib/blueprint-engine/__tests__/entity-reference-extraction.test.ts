@@ -73,6 +73,7 @@ describe("entity-reference-extraction", () => {
       - \`approval_level\` integer
       - \`agent_id\` uuid REFERENCES agents(id)
       Enum values: \`approved\`, \`active\`.
+      UPDATE status SET value = 'pending';
     `;
     const issues = validateEntityReferencesInText(minimalBlueprint, text, "backend_schema");
     expect(issues.filter((i) => i.category === "entity_registry")).toHaveLength(0);

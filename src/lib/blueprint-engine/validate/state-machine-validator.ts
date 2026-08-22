@@ -29,6 +29,13 @@ function transitionKey(from: string, to: string): string {
   return `${from}->${to}`;
 }
 
+function mentionIsInTransitionChain(content: string, index: number): boolean {
+  const lineStart = content.lastIndexOf("\n", index) + 1;
+  const lineEnd = content.indexOf("\n", index);
+  const line = content.slice(lineStart, lineEnd === -1 ? content.length : lineEnd);
+  return /→|->|—>/.test(line);
+}
+
 function buildAllowedTransitions(
   blueprint: ProjectBlueprint
 ): Map<string, { machineId: string; machineName: string }> {
@@ -179,11 +186,22 @@ export function validateStateTransitionsInDocument(
     const preSuccessStates = [...allStates].filter(
       (state) => !successStates.has(state) && !terminalStates.has(state)
     );
-    const mentionsPreSuccessState = preSuccessStates.some((state) =>
-      new RegExp(`\\b${state}\\b`).test(content)
-    );
 
-    if (mentionsPreSuccessState) {
+    const hasProximityIssue = preSuccessStates.some((state) => {
+      const stateRegex = new RegExp(`\\b${state}\\b`, "gi");
+      for (const stateMatch of content.matchAll(stateRegex)) {
+        const index = stateMatch.index ?? 0;
+        if (mentionIsInTransitionChain(content, index)) continue;
+
+        const start = Math.max(0, index - 200);
+        const end = Math.min(content.length, index + stateMatch[0].length + 200);
+        const window = content.slice(start, end);
+        if (PREMATURE_EXECUTION_PATTERN.test(window)) return true;
+      }
+      return false;
+    });
+
+    if (hasProximityIssue) {
       issues.push(
         workflowIssue(
           `SM-DOC-COPY-${documentType}`,

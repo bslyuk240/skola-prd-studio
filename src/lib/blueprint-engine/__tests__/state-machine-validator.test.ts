@@ -67,6 +67,17 @@ describe("state machine validator", () => {
 
     expect(issues.some((issue) => issue.message.toLowerCase().includes("execut"))).toBe(true);
   });
+
+  it("ignores completed language far from in-progress workflow states", () => {
+    const content = `
+      Workflow: PROPOSED → PENDING_APPROVAL → EXECUTING → SUCCEEDED.
+
+      ## Reporting
+      Historical runs successfully completed last month in the analytics dashboard.
+    `;
+    const issues = validateStateTransitionsInDocument(blueprint, content, "app_flow");
+    expect(issues.filter((issue) => issue.id.startsWith("SM-DOC-COPY"))).toHaveLength(0);
+  });
 });
 
 describe("ai action policy", () => {
