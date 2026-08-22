@@ -62,6 +62,7 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
 
   const ready = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const readinessScore = integrityReport.breakdown.overall;
+  const securityScore = integrityReport.breakdown.security;
   const integrityPassed = integrityReport.status === "pass" && readinessScore != null;
 
   async function pollDocStatus(
@@ -240,16 +241,20 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
         <Card>
           <CardContent className="p-5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Security Score</p>
-            <p className={cn("text-3xl font-bold mb-2", scoreColor(integrityReport.breakdown.security))}>
-              {integrityReport.breakdown.security}/100
+            <p className={cn("text-3xl font-bold mb-2", scoreColor(securityScore))}>
+              {securityScore == null ? "—" : `${securityScore}/100`}
             </p>
-            <Progress value={integrityReport.breakdown.security} className="h-1.5" />
+            {securityScore != null ? (
+              <Progress value={securityScore} className="h-1.5" />
+            ) : null}
             <p className="text-xs text-muted-foreground mt-1.5">
-              {integrityReport.breakdown.blockers.includes("open_security_todos")
-                ? "Open security todos remain"
-                : (integrityReport.breakdown.security) < 60
-                  ? "Needs Review"
-                  : "Good"}
+              {securityScore == null
+                ? "Pending validation"
+                : integrityReport.breakdown.blockers.includes("open_security_todos")
+                  ? "Open security todos remain"
+                  : securityScore < 60
+                    ? "Needs Review"
+                    : "Good"}
             </p>
           </CardContent>
         </Card>
