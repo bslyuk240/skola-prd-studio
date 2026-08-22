@@ -49,6 +49,7 @@ function inferSalesCrm(ctx: ProjectContext): boolean {
     ctx.longDescription,
     ctx.mainFeatures,
     ctx.adminFeatures,
+    ctx.integrationNeeds,
   ]
     .filter(Boolean)
     .join(" ")

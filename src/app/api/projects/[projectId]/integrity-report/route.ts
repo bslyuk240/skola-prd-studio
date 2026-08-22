@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { projects, documents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { getProjectBlueprint, saveProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { ensureProjectBlueprint, saveProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import { patchBlueprintFromIssues } from "@/lib/blueprint-engine/critic/conflict-resolver";
 import { buildIntegrityReport } from "@/lib/blueprint-engine/integrity-report";
 
@@ -28,7 +28,7 @@ export async function GET(
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const blueprint = await getProjectBlueprint(project);
+  const blueprint = await ensureProjectBlueprint(project);
   const projectDocs = await db
     .select()
     .from(documents)
@@ -68,7 +68,7 @@ export async function POST(
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const blueprint = await getProjectBlueprint(project);
+  const blueprint = await ensureProjectBlueprint(project);
   if (!blueprint) {
     return NextResponse.json({ error: "Blueprint model not built yet" }, { status: 404 });
   }

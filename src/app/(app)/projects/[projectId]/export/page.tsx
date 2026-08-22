@@ -4,7 +4,7 @@ import { projects, documents, buildTasks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { ExportClient } from "@/components/export/export-client";
-import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import { buildIntegrityReport } from "@/lib/blueprint-engine/integrity-report";
 
 interface Props {
@@ -29,7 +29,7 @@ export default async function ExportPage({ params }: Props) {
   const readyDocs = docs.filter((d) => d.status === "ready" || d.status === "approved");
   const doneTasks = tasks.filter((t) => t.status === "done");
 
-  const blueprint = await getProjectBlueprint(project);
+  const blueprint = await ensureProjectBlueprint(project);
   const snapshots = docs
     .filter((doc) => doc.content)
     .map((doc) => ({ type: doc.type, content: doc.content! }));

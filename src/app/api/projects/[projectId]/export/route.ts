@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, documents, buildTasks, securityChecks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
+import { ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import { buildIntegrityReport } from "@/lib/blueprint-engine/integrity-report";
 import {
   PROJECT_DOCUMENT_DEFINITIONS,
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const docs = await db.select().from(documents).where(eq(documents.projectId, projectId));
   const tasks = await db.select().from(buildTasks).where(eq(buildTasks.projectId, projectId));
 
-  const blueprint = await getProjectBlueprint(project);
+  const blueprint = await ensureProjectBlueprint(project);
   const snapshots = docs
     .filter((doc) => doc.content)
     .map((doc) => ({ type: doc.type, content: doc.content! }));
