@@ -60,5 +60,6 @@ export function finalizeBlueprint(
   }
   result = applyEntityFieldTemplates(result);
   result = applyPolicyEngine(result);
+  result = applyGlossaryToBlueprint(result);
   return result;
 }

@@ -76,6 +76,34 @@ export function buildSchemaArchitectureRules(
   return lines.join("\n");
 }
 
+export function buildMandatoryDomainTablesBlock(
+  blueprint: ProjectBlueprint,
+  docType: BlueprintDocumentType
+): string {
+  if (docType !== "backend_schema") return "";
+
+  const platformTables = new Set([
+    "users",
+    "organizations",
+    "organization_memberships",
+    "agents",
+    "agent_versions",
+    "workflow_runs",
+    "workflow_run_events",
+    "tool_executions",
+    "approval_requests",
+  ]);
+
+  const domainTables = Object.keys(blueprint.entities).filter((name) => !platformTables.has(name));
+  if (domainTables.length === 0) return "";
+
+  return `
+MANDATORY DOMAIN TABLES (backend_schema must define ALL of these in the ERD and table definitions):
+${domainTables.map((table) => `- ${table}: include full field list, FKs, indexes, and RLS`).join("\n")}
+Do NOT omit these tables or substitute agent metadata / tool_executions / workflow_runs for business data storage.
+`.trim();
+}
+
 export function buildGanttTimelineRules(blueprint: ProjectBlueprint): string {
   if (blueprint.metadata.projectStartDate) {
     return `Gantt chart: use dateFormat YYYY-MM-DD starting from projectStartDate ${blueprint.metadata.projectStartDate}.`;

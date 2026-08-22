@@ -19,6 +19,12 @@ const KNOWN_ENTITY_SYNONYMS: Record<string, string[]> = {
   agents: ["ai_agents", "bot_agents", "assistant_agents"],
   users: ["user_accounts", "accounts"],
   organizations: ["tenants", "orgs", "workspaces", "tenant_orgs"],
+  organization_memberships: ["org_memberships", "memberships", "tenant_memberships", "members"],
+  contacts: ["contact", "crm_contacts", "customer_contacts"],
+  leads: ["lead", "sales_leads", "crm_leads"],
+  follow_ups: ["follow_up", "followups", "follow-up", "sales_follow_ups"],
+  interactions: ["interaction", "touchpoints", "sales_interactions"],
+  content_calendar: ["content_calendars", "social_calendar", "post_calendar"],
 };
 
 function singularizeSnake(name: string): string | null {

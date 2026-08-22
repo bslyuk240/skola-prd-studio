@@ -9,6 +9,7 @@ import {
 import {
   buildGanttTimelineRules,
   buildImplementationPhaseOrderRules,
+  buildMandatoryDomainTablesBlock,
   buildModelBindingBlock,
   buildStateMachineBinding,
 } from "@/lib/blueprint-engine/render/model-binding";
@@ -57,9 +58,11 @@ ${buildImplementationPhaseOrderRules(blueprint)}`.trim();
   }
 
   if (docType === "backend_schema" || docType === "trd") {
+    const domainBlock =
+      docType === "backend_schema" ? buildMandatoryDomainTablesBlock(blueprint, docType) : "";
     return `${legacy}
 
-Define every table in the canonical entity registry, including domain/business tables. Do not claim that custom or external domain tables should be avoided when they are listed in the canonical model.`;
+Define every table in the canonical entity registry, including domain/business tables. Do not claim that custom or external domain tables should be avoided when they are listed in the canonical model.${domainBlock ? `\n\n${domainBlock}` : ""}`;
   }
 
   if (docType === "app_flow") {

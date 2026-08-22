@@ -206,15 +206,32 @@ export function isResolvableIssue(issue: ValidationIssue): boolean {
   if (issue.id.startsWith("CONSISTENCY-MODEL-ENTITY-")) return true;
   if (issue.id.startsWith("CONSISTENCY-MODEL-API-")) return true;
   if (issue.id.startsWith("CONSISTENCY-UPLOAD-")) return true;
+  if (issue.id.startsWith("CONSISTENCY-SEM-")) return true;
+  if (issue.id.startsWith("CONSISTENCY-ENTITY-")) return true;
   return RESOLVABLE_CATEGORIES.has(issue.category) && issue.documentTypes.length > 0;
 }
 
 export function affectedDocumentTypes(issues: ValidationIssue[]): string[] {
   const types = new Set<string>();
   for (const issue of issues) {
-    if (issue.severity === "error" && isResolvableIssue(issue)) {
-      issue.documentTypes.forEach((type) => types.add(type));
+    if (issue.severity !== "error" || !isResolvableIssue(issue)) continue;
+
+    if (issue.id.startsWith("CONSISTENCY-SEM-")) {
+      types.add("backend_schema");
+      continue;
     }
+
+    if (issue.id.startsWith("CONSISTENCY-ENTITY-")) {
+      if (issue.documentTypes.includes("backend_schema")) {
+        types.add("backend_schema");
+      }
+      if (issue.documentTypes.includes("trd")) {
+        types.add("trd");
+      }
+      continue;
+    }
+
+    issue.documentTypes.forEach((type) => types.add(type));
   }
   return [...types];
 }
