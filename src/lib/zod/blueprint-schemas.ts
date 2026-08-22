@@ -268,6 +268,13 @@ export const projectBlueprintSchema = z.object({
       .optional(),
     backupRecovery: z.array(backupRecoveryModelSchema).optional(),
   }),
+  policyEngine: z
+    .object({
+      enabled: z.boolean().default(false),
+      components: z.array(z.string()).default([]),
+      evaluates: z.array(z.string()).default([]),
+    })
+    .optional(),
   assumptions: z.array(assumptionEntrySchema).default([]),
   uploadPolicy: z
     .object({

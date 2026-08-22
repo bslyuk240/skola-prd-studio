@@ -320,8 +320,13 @@ Show ALL tables and ALL relationships.
    - All fields with: name | type | constraints | description (as markdown table)
    - Primary keys, foreign keys, unique constraints
    - Indexes
+   - Include ALL tables from the canonical entity registry — core platform tables AND domain/business tables (e.g. contacts, leads, follow_ups)
+   - Business domain data belongs in domain tables, NOT in agent metadata, tool_executions, or workflow_runs (those are for execution forensics and current run state)
+   - workflow_runs holds mutable current state; workflow_run_events is append-only history
+   - approval_requests must define proposed_action_payload, approved_action_payload, payload_hash, and revision
 
 Do NOT include REST API routes or endpoint definitions in this document. API routes belong exclusively in the API & Integration Specification.
+Do NOT instruct readers to avoid custom/domain tables when those tables are listed in the canonical model.
 
 4. Export & Download Data Access
 ${EXPORT_SECURITY_REQUIREMENTS}

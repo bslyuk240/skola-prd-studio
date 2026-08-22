@@ -18,6 +18,10 @@ export type ReadinessBreakdown = {
   conflicts: number | null;
   assumptions: number | null;
   security: number | null;
+  /** Security specification coverage in generated documents (not deployed posture). */
+  securitySpecCoverage: number | null;
+  /** Implemented security posture — null until runtime/implementation telemetry exists. */
+  securityPosture: number | null;
   integrations: number | null;
   rbac: number | null;
   documentCoverage: number | null;
@@ -403,6 +407,8 @@ export function computeReadinessBreakdown(
     conflicts,
     assumptions,
     security,
+    securitySpecCoverage: security,
+    securityPosture: null,
     integrations,
     rbac,
     documentCoverage,

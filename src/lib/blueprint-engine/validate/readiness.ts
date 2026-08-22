@@ -6,6 +6,7 @@ import {
 } from "@/lib/blueprint-engine/validate/structural-completeness";
 import { detectStackConflicts } from "@/lib/blueprint-engine/registry/capabilities";
 import { validateDocumentConsistency } from "@/lib/blueprint-engine/validate/consistency-validator";
+import { validateSemanticConsistency } from "@/lib/blueprint-engine/validate/semantic-consistency-validator";
 import { validateWorkflowDocuments } from "@/lib/blueprint-engine/validate/state-machine-validator";
 import { validateAiActionPolicy } from "@/lib/blueprint-engine/validate/ai-action-policy";
 import {
@@ -65,6 +66,7 @@ export function runBlueprintValidation(
 
   if (canValidateCategory("conflicts", documentsWithStatus) && readyDocuments.length > 0) {
     issues.push(...validateDocumentConsistency(blueprint, readyDocuments));
+    issues.push(...validateSemanticConsistency(blueprint, readyDocuments));
     issues.push(...validateWorkflowDocuments(blueprint, readyDocuments));
     issues.push(...validateAiActionPolicy(blueprint, readyDocuments));
   }

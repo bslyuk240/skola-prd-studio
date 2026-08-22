@@ -34,6 +34,8 @@ const EMPTY_BREAKDOWN: ReadinessBreakdown = {
   conflicts: null,
   assumptions: null,
   security: null,
+  securitySpecCoverage: null,
+  securityPosture: null,
   integrations: null,
   rbac: null,
   documentCoverage: null,

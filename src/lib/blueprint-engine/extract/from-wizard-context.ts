@@ -43,21 +43,6 @@ function inferAsyncProcessing(ctx: ProjectContext): boolean {
   );
 }
 
-function inferSalesCrm(ctx: ProjectContext): boolean {
-  const haystack = [
-    ctx.shortDescription,
-    ctx.longDescription,
-    ctx.mainFeatures,
-    ctx.adminFeatures,
-    ctx.integrationNeeds,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return /\bsales\b|\bleads?\b|\bcrm\b|\bpipeline\b/i.test(haystack);
-}
-
 /** Deterministic first pass — LLM enrichment comes in Phase 1. */
 export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBlueprint {
   const now = new Date();
@@ -108,7 +93,9 @@ export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBluepr
   entities.users = {
     id: "ENT-users",
     tableName: "users",
-    description: "Human user accounts",
+    description: ctx.multiTenancy
+      ? "Global human identity. Tenant membership and roles live in organization_memberships."
+      : "Human user accounts",
     fields: [],
     complete: false,
   };
@@ -131,7 +118,7 @@ export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBluepr
     entities.workflow_runs = {
       id: "ENT-workflow_runs",
       tableName: "workflow_runs",
-      description: "Agent or workflow execution runs",
+      description: "Mutable current state of an agent/workflow execution (not append-only history)",
       fields: [],
       complete: false,
     };
@@ -146,16 +133,6 @@ export function buildBlueprintSeedFromWizard(ctx: ProjectContext): ProjectBluepr
       id: "ENT-approval_requests",
       tableName: "approval_requests",
       description: "Human approval gates for high-risk agent actions",
-      fields: [],
-      complete: false,
-    };
-  }
-
-  if (inferSalesCrm(ctx)) {
-    entities.leads = {
-      id: "ENT-leads",
-      tableName: "leads",
-      description: "Sales leads tracked by sales-facing agents",
       fields: [],
       complete: false,
     };

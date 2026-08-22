@@ -18,15 +18,62 @@ export function buildModelBindingBlock(
 
   return `
 MODEL-DRIVEN RENDER RULES (${docType}):
-- Use ONLY canonical entity/table names: ${entities.join(", ") || "(none)"}
+- Canonical entity/table names include core platform tables AND domain tables listed below: ${entities.join(", ") || "(none)"}
 - Use ONLY canonical roles: ${roles.join(", ") || "(none)"}
-- Do NOT introduce tables, roles, API paths, or integrations absent from the canonical model below
+- Do NOT invent alternate table names for entities already in the canonical model
+- You MAY reference any table in the canonical entity registry — domain/business tables are first-class, not exceptions
+- Do NOT store business domain data (CRM, leads, contacts, calendar content) inside agent metadata, tool_executions, or workflow_runs — those tables are for execution forensics and current run state only
 - Reference functional requirements by ID (${blueprint.requirements.functional.map((r) => r.id).join(", ") || "none"})
 - Reference API endpoints by stable ID when listing endpoints:
 ${apiSummary || "- (planned from canonical model)"}
 - Functional requirements to trace:
 ${requirements || "- (none)"}
+${buildSchemaArchitectureRules(blueprint, docType)}
 `.trim();
+}
+
+export function buildSchemaArchitectureRules(
+  blueprint: ProjectBlueprint,
+  docType: BlueprintDocumentType
+): string {
+  if (docType !== "backend_schema" && docType !== "trd" && docType !== "prd") return "";
+
+  const domainTables = Object.keys(blueprint.entities).filter(
+    (name) =>
+      ![
+        "users",
+        "organizations",
+        "organization_memberships",
+        "agents",
+        "agent_versions",
+        "workflow_runs",
+        "workflow_run_events",
+        "tool_executions",
+        "approval_requests",
+      ].includes(name)
+  );
+
+  const lines = [
+    "SCHEMA ARCHITECTURE RULES:",
+    "- users = global identity; organization_memberships = tenant role and access",
+    "- workflow_runs = mutable current execution state; workflow_run_events = append-only transition history",
+    "- approval_requests must store proposed_action_payload, approved_action_payload, payload_hash, and revision for immutable approval integrity",
+    "- tool_executions and workflow_runs require idempotency_key when retries or external writes are enabled",
+  ];
+
+  if (blueprint.policyEngine?.enabled) {
+    lines.push(
+      "- Policy Engine evaluates authorization, risk, autonomy, and approval routing before tool execution (document as a first-class component)"
+    );
+  }
+
+  if (domainTables.length > 0) {
+    lines.push(
+      `- Domain/business tables (${domainTables.join(", ")}) MUST have full CREATE TABLE definitions — never replace them with audit-table storage`
+    );
+  }
+
+  return lines.join("\n");
 }
 
 export function buildGanttTimelineRules(blueprint: ProjectBlueprint): string {

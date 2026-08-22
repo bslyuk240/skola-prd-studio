@@ -33,6 +33,7 @@ export function validateStructuralCompleteness(
       "tool_executions",
       "agent_versions",
       "workflow_runs",
+      "workflow_run_events",
       "approval_requests",
     ];
     for (const table of required) {

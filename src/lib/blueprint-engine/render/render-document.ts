@@ -59,7 +59,7 @@ ${buildImplementationPhaseOrderRules(blueprint)}`.trim();
   if (docType === "backend_schema" || docType === "trd") {
     return `${legacy}
 
-Use ONLY tables from the canonical entity registry when defining schema and ERD diagrams.`;
+Define every table in the canonical entity registry, including domain/business tables. Do not claim that custom or external domain tables should be avoided when they are listed in the canonical model.`;
   }
 
   if (docType === "app_flow") {
