@@ -60,7 +60,7 @@ describe("unknown entity lint", () => {
     const blueprint = finalizeBlueprint(buildBlueprintSeedFromWizard(ctx), ctx);
     const result = enforceTerminologyOnContent(
       blueprint,
-      "The `approval_tasks` table links to `custom_ledger_entries` for payroll.",
+      "The approval_tasks table stores payroll rows. REFERENCES custom_ledger_entries (id).",
       "backend_schema"
     );
 

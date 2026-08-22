@@ -1,13 +1,99 @@
-/** Extract only explicit SQL/schema table references — not prose or column names. */
+/** Extract only explicit SQL/schema table references — not columns, enums, or prose. */
 
 const EXPLICIT_TABLE_PATTERNS: RegExp[] = [
-  /`([a-z][a-z0-9_]+)`/gi,
   /CREATE TABLE (?:IF NOT EXISTS )?([a-z][a-z0-9_]+)/gi,
   /(?:FROM|JOIN|INTO|UPDATE)\s+([a-z][a-z0-9_]+)/gi,
   /REFERENCES\s+([a-z][a-z0-9_]+)/gi,
   /\b([a-z][a-z0-9_]+)\s+table\b/gi,
   /(?:entity|table):\s*([a-z][a-z0-9_]+)/gi,
 ];
+
+const COLUMN_LIKE_SUFFIXES =
+  /(_id|_at|_by|_type|_level|_status|_payload|_key|_name|_count|_url|_config|_number|_tag|_notes|_data|_params|_idx|_index|_hash|_token|_secret|_email|_role|_amount|_cost|_rate|_size|_mode|_flag)$/;
+
+const ENUM_LIKE_TOKENS = new Set([
+  "active",
+  "approved",
+  "pending",
+  "draft",
+  "failed",
+  "cancelled",
+  "canceled",
+  "rejected",
+  "queued",
+  "running",
+  "completed",
+  "paused",
+  "archived",
+  "proposed",
+  "executing",
+  "waiting",
+  "succeeded",
+  "inactive",
+  "enabled",
+  "disabled",
+  "deleted",
+  "open",
+  "closed",
+]);
+
+const TABLE_LIKE_SUFFIXES = [
+  "_requests",
+  "_runs",
+  "_executions",
+  "_versions",
+  "_logs",
+  "_entries",
+  "_records",
+  "_items",
+  "_events",
+  "_tasks",
+  "_documents",
+  "_chunks",
+  "_embeddings",
+  "_connections",
+  "_members",
+  "_accounts",
+  "_sessions",
+  "_subscriptions",
+  "_invoices",
+  "_webhooks",
+  "_notifications",
+  "_messages",
+  "_comments",
+  "_attachments",
+  "_files",
+  "_assets",
+  "_policies",
+  "_roles",
+  "_permissions",
+  "_audits",
+  "_metrics",
+  "_snapshots",
+  "_templates",
+  "_profiles",
+  "_settings",
+];
+
+const KNOWN_TABLE_NAMES = new Set([
+  "users",
+  "agents",
+  "organizations",
+  "documents",
+  "workflows",
+  "integrations",
+  "subscriptions",
+  "invoices",
+  "sessions",
+  "accounts",
+  "members",
+  "teams",
+  "projects",
+  "events",
+  "logs",
+  "files",
+  "assets",
+]);
 
 const WORKFLOW_STATE_HINTS = new Set([
   "proposed",
@@ -35,6 +121,21 @@ const WORKFLOW_STATE_HINTS = new Set([
 const ENV_VAR_SUFFIXES =
   /(_KEY|_URL|_DSN|_SECRET|_TOKEN|_HOST|_BUCKET|_NAME|_ID|_API|_UUID|_INDEX|_IDX)$/;
 
+export function isLikelyColumnOrEnum(name: string): boolean {
+  if (ENUM_LIKE_TOKENS.has(name)) return true;
+  if (COLUMN_LIKE_SUFFIXES.test(name)) return true;
+  return false;
+}
+
+/** Heuristic: does this snake_case token plausibly name a database table? */
+export function looksLikeTableReference(name: string): boolean {
+  if (isLikelyColumnOrEnum(name)) return false;
+  if (KNOWN_TABLE_NAMES.has(name)) return true;
+  if (TABLE_LIKE_SUFFIXES.some((suffix) => name.endsWith(suffix))) return true;
+  if (/^[a-z][a-z0-9_]*s$/.test(name) && name.length >= 5) return true;
+  return false;
+}
+
 export function extractExplicitTableReferences(text: string): string[] {
   const refs = new Set<string>();
 
@@ -42,7 +143,9 @@ export function extractExplicitTableReferences(text: string): string[] {
     pattern.lastIndex = 0;
     for (const match of text.matchAll(pattern)) {
       const name = match[1].toLowerCase();
-      if (name.length >= 3) refs.add(name);
+      if (name.length >= 3 && looksLikeTableReference(name)) {
+        refs.add(name);
+      }
     }
   }
 
