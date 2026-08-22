@@ -1,32 +1,6 @@
 import type { ProjectBlueprint, ValidationIssue } from "@/lib/zod/blueprint-schemas";
 import { requirementsMissingTests } from "@/lib/blueprint-engine/plan/qa-planner";
-
-const TECHNICAL_FIELD_ALLOWLIST = new Set([
-  "created_at",
-  "updated_at",
-  "deleted_at",
-  "user_id",
-  "organization_id",
-  "tenant_id",
-  "session_id",
-  "access_token",
-  "refresh_token",
-  "email_verified",
-  "is_active",
-  "foreign_key",
-  "primary_key",
-  "not_null",
-  "date_format",
-  "api_key",
-  "webhook_secret",
-]);
-
-function looksLikeEntityTable(name: string): boolean {
-  if (name.length < 4) return false;
-  const suffixes = ["_id", "_ids", "_requests", "_runs", "_executions", "_versions", "_logs"];
-  if (suffixes.some((suffix) => name.endsWith(suffix))) return true;
-  return name.split("_").length >= 2;
-}
+import { extractExplicitTableReferences } from "@/lib/blueprint-engine/validate/entity-reference-extraction";
 
 export function validateStructuralCompleteness(
   blueprint: ProjectBlueprint,
@@ -125,18 +99,10 @@ export function validateEntityReferencesInText(
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const canonicalNames = new Set(Object.keys(blueprint.entities));
-
-  const tablePattern = /\b([a-z][a-z0-9_]{2,})\b/g;
-  const mentioned = new Set<string>();
-  let match: RegExpExecArray | null;
-
-  while ((match = tablePattern.exec(text.toLowerCase())) !== null) {
-    if (match[1].includes("_")) mentioned.add(match[1]);
-  }
+  const mentioned = extractExplicitTableReferences(text);
 
   for (const name of mentioned) {
     if (canonicalNames.has(name)) continue;
-    if (TECHNICAL_FIELD_ALLOWLIST.has(name)) continue;
 
     const rejected = blueprint.glossary.flatMap((g) => g.rejectedSynonyms);
     if (rejected.includes(name)) {
@@ -152,16 +118,14 @@ export function validateEntityReferencesInText(
       continue;
     }
 
-    if (looksLikeEntityTable(name)) {
-      issues.push({
-        id: `ENTITY-UNKNOWN-${name}`,
-        severity: "error",
-        category: "entity_registry",
-        message: `Document introduces unknown entity "${name}" not in the canonical model`,
-        documentTypes: [documentType],
-        resolution: `Remove "${name}" or add it to the project blueprint entity registry`,
-      });
-    }
+    issues.push({
+      id: `ENTITY-UNKNOWN-${name}`,
+      severity: "error",
+      category: "entity_registry",
+      message: `Document references unknown table "${name}" not in the canonical model`,
+      documentTypes: [documentType],
+      resolution: `Remove "${name}" or add it to the project blueprint entity registry`,
+    });
   }
 
   return issues;

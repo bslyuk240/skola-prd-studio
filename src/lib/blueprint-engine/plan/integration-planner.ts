@@ -14,6 +14,7 @@ import {
 import {
   classifyIntegration,
   getServiceCapability,
+  isEmptyIntegrationValue,
   resolveServiceKey,
 } from "@/lib/blueprint-engine/registry/capabilities";
 
@@ -164,21 +165,23 @@ function mergeApiCatalogue(existing: ApiEndpoint[], planned: ApiEndpoint[]): Api
 }
 
 function enrichIntegrations(integrations: IntegrationDefinition[]): IntegrationDefinition[] {
-  return integrations.map((integration, index) => {
-    const capability = getServiceCapability(integration.name);
-    const failurePolicy =
-      integration.failurePolicy ?? policyForIntegration(integration.name, integration.category);
-    return {
-      ...integration,
-      id: integration.id || nextStableId("INT", index),
-      webhooks: integration.webhooks || Boolean(capability?.supportsWebhooks),
-      retryPolicy: integration.retryPolicy || failurePolicy.maxRetries > 0,
-      verified: integration.verified ?? classifyIntegration(integration.name).verified,
-      verificationStatus:
-        integration.verificationStatus ?? classifyIntegration(integration.name).verificationStatus,
-      failurePolicy,
-    };
-  });
+  return integrations
+    .filter((integration) => !isEmptyIntegrationValue(integration.name))
+    .map((integration, index) => {
+      const capability = getServiceCapability(integration.name);
+      const failurePolicy =
+        integration.failurePolicy ?? policyForIntegration(integration.name, integration.category);
+      return {
+        ...integration,
+        id: integration.id || nextStableId("INT", index),
+        webhooks: integration.webhooks || Boolean(capability?.supportsWebhooks),
+        retryPolicy: integration.retryPolicy || failurePolicy.maxRetries > 0,
+        verified: integration.verified ?? classifyIntegration(integration.name).verified,
+        verificationStatus:
+          integration.verificationStatus ?? classifyIntegration(integration.name).verificationStatus,
+        failurePolicy,
+      };
+    });
 }
 
 function buildWebhooksFromIntegrations(

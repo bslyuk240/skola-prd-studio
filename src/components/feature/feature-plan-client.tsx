@@ -74,14 +74,32 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
   const readyDocs = documents.filter((d) => d.status === "ready" || d.status === "approved").length;
   const progress = Math.round((readyDocs / 9) * 100);
 
-  async function pollDocStatus(docType: string): Promise<"ready" | "pending" | "timeout"> {
-    for (let i = 0; i < 80; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const res = await fetch(`/api/feature/generate/status?featureRequestId=${request.id}&documentType=${docType}`);
+  async function pollDocStatus(
+    docType: string
+  ): Promise<"complete" | "failed" | "timeout"> {
+    const MAX_POLLS = 180;
+    const INTERVAL_MS = 5000;
+    let sawGenerating = false;
+
+    for (let i = 0; i < MAX_POLLS; i++) {
+      await new Promise((r) => setTimeout(r, INTERVAL_MS));
+      const res = await fetch(
+        `/api/feature/generate/status?featureRequestId=${request.id}&documentType=${docType}`
+      );
       if (!res.ok) continue;
       const data = await res.json();
-      if (data.status === "ready") return "ready";
-      if (data.status === "pending") return "pending";
+      const status = data.status as string;
+      const wordCount = (data.wordCount as number) ?? 0;
+
+      if (status === "generating") {
+        sawGenerating = true;
+        continue;
+      }
+      if (status === "ready" || status === "approved" || status === "needs_revision") {
+        return "complete";
+      }
+      if (status === "pending" && wordCount > 0) return "complete";
+      if (status === "pending" && sawGenerating) return "failed";
     }
     return "timeout";
   }
@@ -101,9 +119,14 @@ export function FeaturePlanClient({ request, documents, tasks, repoConnection }:
 
       if (res.status === 202) {
         const result = await pollDocStatus(docType);
-        if (result === "pending") throw new Error("Generation failed");
+        if (result === "failed") {
+          toast.error("Generation failed. Open the document or retry in a moment.");
+          router.refresh();
+          return;
+        }
         if (result === "timeout") {
-          toast.error("Still generating — check back in a moment.");
+          toast.message("Still generating in the background — refresh in a minute to check status.");
+          router.refresh();
           return;
         }
       }

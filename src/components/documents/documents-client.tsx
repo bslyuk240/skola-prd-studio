@@ -64,14 +64,39 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
   const readinessScore = integrityReport.breakdown.overall;
   const integrityPassed = integrityReport.status === "pass" && readinessScore != null;
 
-  async function pollDocStatus(docType: string): Promise<"ready" | "pending" | "timeout"> {
-    for (let i = 0; i < 80; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const res = await fetch(`/api/generate/status?projectId=${project.id}&documentType=${docType}`);
+  async function pollDocStatus(
+    docType: string
+  ): Promise<"complete" | "failed" | "timeout"> {
+    const MAX_POLLS = 180;
+    const INTERVAL_MS = 5000;
+    let sawGenerating = false;
+
+    for (let i = 0; i < MAX_POLLS; i++) {
+      await new Promise((r) => setTimeout(r, INTERVAL_MS));
+      const res = await fetch(
+        `/api/generate/status?projectId=${project.id}&documentType=${docType}`
+      );
       if (!res.ok) continue;
       const data = await res.json();
-      if (data.status === "ready") return "ready";
-      if (data.status === "pending") return "pending";
+      const status = data.status as string;
+      const wordCount = (data.wordCount as number) ?? 0;
+
+      if (status === "generating") {
+        sawGenerating = true;
+        continue;
+      }
+
+      if (status === "ready" || status === "approved" || status === "needs_revision") {
+        return "complete";
+      }
+
+      if (status === "pending" && wordCount > 0) {
+        return "complete";
+      }
+
+      if (status === "pending" && sawGenerating) {
+        return "failed";
+      }
     }
     return "timeout";
   }
@@ -98,21 +123,34 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
           return;
         }
       }
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data.error as string) || "Generation request failed");
+      }
 
       if (res.status === 202) {
         const result = await pollDocStatus(docType);
-        if (result === "pending") throw new Error();
+        if (result === "failed") {
+          toast.error("Generation failed. Open the document or retry in a moment.");
+          router.refresh();
+          return;
+        }
         if (result === "timeout") {
-          toast.error("Still generating — check back in a moment.");
+          toast.message("Still generating in the background — refresh in a minute to check status.");
+          router.refresh();
           return;
         }
       }
 
       toast.success("Document generated successfully!");
       router.refresh();
-    } catch {
-      toast.error("Generation failed. Check your OpenRouter API key.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Generation failed";
+      if (message.toLowerCase().includes("api key") || message.toLowerCase().includes("openrouter")) {
+        toast.error("Generation failed. Check your OpenRouter API key in Settings.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setGenerating((p) => ({ ...p, [docType]: false }));
       setEiePhase((p) => ({ ...p, [docType]: false }));

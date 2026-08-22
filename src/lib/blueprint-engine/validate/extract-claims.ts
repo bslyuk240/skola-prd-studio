@@ -1,3 +1,5 @@
+import { filterWorkflowStates } from "@/lib/blueprint-engine/validate/entity-reference-extraction";
+
 export type DocumentClaims = {
   documentType: string;
   uploadTypes: string[];
@@ -92,7 +94,7 @@ export function extractStates(text: string): string[] {
       states.add(state);
     }
   }
-  return [...states].sort();
+  return filterWorkflowStates([...states]).sort();
 }
 
 export function extractEntities(text: string, knownEntities: string[] = []): string[] {
