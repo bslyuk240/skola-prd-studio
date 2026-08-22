@@ -50,9 +50,23 @@ export const handler = async (event: Event) => {
     console.error("[generate-background]", err);
     if (projectId && documentType) {
       try {
+        const [doc] = await db
+          .select()
+          .from(documents)
+          .where(
+            and(
+              eq(documents.projectId, projectId),
+              eq(documents.type, documentType as typeof documents.$inferSelect["type"])
+            )
+          )
+          .limit(1);
+
         await db
           .update(documents)
-          .set({ status: "pending", updatedAt: new Date() })
+          .set({
+            status: doc?.content?.trim() ? "needs_revision" : "pending",
+            updatedAt: new Date(),
+          })
           .where(
             and(
               eq(documents.projectId, projectId),

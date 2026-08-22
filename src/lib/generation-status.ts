@@ -20,6 +20,22 @@ export async function revertStaleBlueprintDocs(projectId: string): Promise<void>
     );
 }
 
+/** Docs with content but pending status were interrupted — surface as needs_revision. */
+export async function repairInterruptedBlueprintDocs(projectId: string): Promise<void> {
+  const rows = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.projectId, projectId), eq(documents.status, "pending")));
+
+  for (const doc of rows) {
+    if (!doc.content?.trim() && !(doc.wordCount && doc.wordCount > 0)) continue;
+    await db
+      .update(documents)
+      .set({ status: "needs_revision", updatedAt: new Date() })
+      .where(eq(documents.id, doc.id));
+  }
+}
+
 export async function revertStaleFeatureDocs(featureRequestId: string): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_GENERATING_MS);
   await db

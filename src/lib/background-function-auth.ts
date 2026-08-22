@@ -28,6 +28,8 @@ export function verifyBackgroundRequest(
   headers: Record<string, string | undefined> | null | undefined,
   secret: string | undefined
 ): boolean {
+  if (!secret?.trim()) return true;
+
   const signature =
     headers?.[BACKGROUND_SIGNATURE_HEADER] ??
     headers?.["X-Background-Signature"];

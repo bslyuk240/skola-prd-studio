@@ -126,7 +126,9 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data.error as string) || "Generation request failed");
+        const detail = typeof data.detail === "string" ? data.detail : undefined;
+        const error = (data.error as string) || "Generation request failed";
+        throw new Error(detail ? `${error}: ${detail}` : error);
       }
 
       if (res.status === 202) {
@@ -314,7 +316,7 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {status !== "pending" && doc?.id && (
+                  {doc?.id && (status !== "pending" || (doc.wordCount ?? 0) > 0) && (
                     <Link href={`/projects/${project.id}/documents/${doc.id}`}>
                       <Button size="sm" variant="outline" className="gap-1.5">
                         <Eye className="w-3.5 h-3.5" />

@@ -25,6 +25,11 @@ describe("background-function-auth", () => {
     expect(verifyBackgroundPayload(body, null, secret)).toBe(false);
   });
 
+  it("allows unsigned requests when no secret is configured", () => {
+    expect(verifyBackgroundRequest(body, {}, undefined)).toBe(true);
+    expect(verifyBackgroundRequest(body, {}, "")).toBe(true);
+  });
+
   it("reads signature from request headers", () => {
     const signature = signBackgroundPayload(body, secret);
     expect(

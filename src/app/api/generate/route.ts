@@ -5,7 +5,7 @@ import { projects, documents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { generateProjectDocument } from "@/lib/generate-project-document";
-import { triggerBackground } from "@/lib/trigger-background";
+import { triggerBackgroundWithResult } from "@/lib/trigger-background";
 import { getProjectBlueprint, ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
 import { isBlueprintModelApproved } from "@/lib/blueprint-engine/apply-architecture-resolution";
 import { projectDocumentTypeSchema } from "@/lib/project-document-types";
@@ -68,13 +68,36 @@ export async function POST(req: NextRequest) {
   // without `netlify dev`). Use Netlify's own canonical site URL rather than
   // req.nextUrl.origin, which can resolve to an internal/edge address.
   const siteUrl = process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
-  const dispatched = await triggerBackground(`${siteUrl}/.netlify/functions/generate-background`, {
-    projectId,
-    documentType,
-    userId,
-  });
-  if (dispatched) {
+  const dispatch = await triggerBackgroundWithResult(
+    `${siteUrl}/.netlify/functions/generate-background`,
+    {
+      projectId,
+      documentType,
+      userId,
+    }
+  );
+  if (dispatch.dispatched) {
     return NextResponse.json({ status: "generating" }, { status: 202 });
+  }
+
+  const onNetlify = Boolean(process.env.URL || process.env.NETLIFY);
+  if (onNetlify) {
+    await db
+      .update(documents)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
+
+    return NextResponse.json(
+      {
+        error: "Background generation dispatch failed",
+        detail:
+          dispatch.error ??
+          (dispatch.status === 403
+            ? "Background function rejected the request. Verify BACKGROUND_FUNCTION_SECRET matches in Netlify environment variables."
+            : "The background worker did not accept the generation job."),
+      },
+      { status: 503 }
+    );
   }
 
   try {
@@ -84,9 +107,18 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[generate] Error:", message, err);
 
+    const [doc] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)))
+      .limit(1);
+
     await db
       .update(documents)
-      .set({ status: "pending", updatedAt: new Date() })
+      .set({
+        status: doc?.content?.trim() ? "needs_revision" : "pending",
+        updatedAt: new Date(),
+      })
       .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
 
     return NextResponse.json({ error: "Generation failed", detail: message }, { status: 500 });
