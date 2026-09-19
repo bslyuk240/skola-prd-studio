@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { projects, documents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateProjectDocument } from "@/lib/generate-project-document";
-import { triggerBackground, triggerBackgroundWithResult } from "@/lib/trigger-background";
+import { triggerBackgroundWithResult } from "@/lib/trigger-background";
 import {
   getProjectBlueprint,
   ensureProjectBlueprint,
@@ -113,26 +113,53 @@ export async function dispatchSingleDocumentGeneration(
   }
 }
 
+/**
+ * Dispatches background generation for every "pending" document on an
+ * already-approved project. Checks each dispatch result — a failed/dropped
+ * call (e.g. the site mid-deploy) otherwise leaves the document stuck at
+ * "generating" forever, since nothing else will ever move it out of that
+ * state. Shared by the MCP connector and the app's own "Approve architecture"
+ * flow so this can't regress in one place and not the other.
+ */
+export async function queuePendingDocuments(
+  projectId: string,
+  userId: string,
+  siteUrl: string
+): Promise<{ queued: number; documentTypes: string[]; dispatchFailures: string[] }> {
+  const pendingDocs = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.projectId, projectId), eq(documents.status, "pending")));
+
+  const dispatchFailures: string[] = [];
+
+  for (const doc of pendingDocs) {
+    await db.update(documents).set({ status: "generating", updatedAt: new Date() }).where(eq(documents.id, doc.id));
+
+    const dispatch = await triggerBackgroundWithResult(`${siteUrl}/.netlify/functions/generate-background`, {
+      projectId,
+      documentType: doc.type,
+      userId,
+    });
+
+    if (!dispatch.dispatched) {
+      dispatchFailures.push(doc.type);
+      await db.update(documents).set({ status: "pending", updatedAt: new Date() }).where(eq(documents.id, doc.id));
+    }
+  }
+
+  return {
+    queued: pendingDocs.length - dispatchFailures.length,
+    documentTypes: pendingDocs.map((d) => d.type),
+    dispatchFailures,
+  };
+}
+
 export async function approveBlueprintAndQueueAllDocuments(
   project: Project,
   userId: string,
   siteUrl: string
-): Promise<{ queued: number; documentTypes: string[] }> {
+): Promise<{ queued: number; documentTypes: string[]; dispatchFailures: string[] }> {
   await ensureBlueprintApproved(project);
-
-  const pendingDocs = await db
-    .select()
-    .from(documents)
-    .where(and(eq(documents.projectId, project.id), eq(documents.status, "pending")));
-
-  for (const doc of pendingDocs) {
-    await db.update(documents).set({ status: "generating", updatedAt: new Date() }).where(eq(documents.id, doc.id));
-    await triggerBackground(`${siteUrl}/.netlify/functions/generate-background`, {
-      projectId: project.id,
-      documentType: doc.type,
-      userId,
-    });
-  }
-
-  return { queued: pendingDocs.length, documentTypes: pendingDocs.map((d) => d.type) };
+  return queuePendingDocuments(project.id, userId, siteUrl);
 }

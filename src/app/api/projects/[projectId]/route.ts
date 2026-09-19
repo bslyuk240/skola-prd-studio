@@ -42,3 +42,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   return NextResponse.json({ success: true, project: updated });
 }
+
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const { projectId } = await params;
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+    .limit(1);
+  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // documents, buildTasks, securityChecks, agentConnections/sessions/logs/questions
+  // all reference projects with onDelete: "cascade" and are removed automatically.
+  // featureRequests and securityScans use onDelete: "set null" — they outlive the
+  // project on purpose (a feature/scan isn't only meaningful in the project's context).
+  await db.delete(projects).where(eq(projects.id, projectId));
+
+  return NextResponse.json({ success: true });
+}
