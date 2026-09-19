@@ -44,6 +44,12 @@ function parseStructMissingIssueId(id: string): { entity: string } | null {
   return { entity: match[1] };
 }
 
+function parseEntityUnknownIssueId(id: string): { entity: string } | null {
+  const match = id.match(/^ENTITY-UNKNOWN-(.+)$/);
+  if (!match) return null;
+  return { entity: match[1] };
+}
+
 function nextApiId(blueprint: ProjectBlueprint): string {
   const numbers = blueprint.apis
     .map((api) => Number.parseInt(api.id.replace(/\D/g, ""), 10))
@@ -149,6 +155,36 @@ export function patchBlueprintFromIssues(
     resolvedIssueIds.push(issue.id);
   }
 
+  // Single-document "unknown table" references (structural-completeness.ts) —
+  // a separate check from CONSISTENCY-MODEL-ENTITY- above (cross-document
+  // drift), but the same fix: register the table so the reference becomes
+  // canonical instead of orphaned.
+  for (const issue of errorIssues) {
+    const entityUnknown = parseEntityUnknownIssueId(issue.id);
+    if (!entityUnknown || nextBlueprint.entities[entityUnknown.entity]) continue;
+
+    const sourceDocument = issue.documentTypes[0] ?? "unknown";
+    nextBlueprint = {
+      ...nextBlueprint,
+      entities: {
+        ...nextBlueprint.entities,
+        [entityUnknown.entity]: {
+          id: entityUnknown.entity,
+          tableName: entityUnknown.entity,
+          description: `Entity referenced in ${sourceDocument} — registered by architect critic`,
+          fields: [],
+          complete: false,
+        },
+      },
+    };
+    patches.push({
+      kind: "entity_registry",
+      entity: entityUnknown.entity,
+      sourceDocument,
+    });
+    resolvedIssueIds.push(issue.id);
+  }
+
   for (const issue of errorIssues) {
     const api = parseApiIssueId(issue.id);
     if (!api) continue;
@@ -247,6 +283,7 @@ export function isResolvableIssue(issue: ValidationIssue): boolean {
   if (issue.id.startsWith("CONSISTENCY-MODEL-API-")) return true;
   if (issue.id.startsWith("CONSISTENCY-UPLOAD-")) return true;
   if (issue.id.startsWith("STRUCT-missing-")) return true;
+  if (issue.id.startsWith("ENTITY-UNKNOWN-")) return true;
   return false;
 }
 
