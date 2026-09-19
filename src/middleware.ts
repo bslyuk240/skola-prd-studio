@@ -10,6 +10,12 @@ const isPublicRoute = createRouteMatcher([
   "/api/mcp(.*)",
   // QStash / inline worker — auth via x-eie-internal-secret in route handler
   "/api/admin/eie/internal/process",
+  // Netlify background functions — invoked server-to-server by our own route
+  // handlers (no Clerk browser session), so this middleware's broad matcher
+  // must not subject them to auth.protect(). Without this, Clerk rejects the
+  // request with a 404 before it ever reaches the function, and every
+  // document generation silently fails.
+  "/.netlify/functions/(.*)",
   // OAuth 2.1 discovery/registration/token endpoints — called by MCP clients
   // before they have a user session. /oauth/authorize and /api/oauth/authorize
   // (the consent screen + its submit handler) stay protected on purpose.
