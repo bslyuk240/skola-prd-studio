@@ -37,8 +37,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_client" }, { status: 400 });
   }
 
+  // 303 forces the browser to GET the target regardless of this request's
+  // method — NextResponse.redirect() defaults to 307, which preserves POST
+  // and breaks OAuth callbacks (they only accept GET).
   if (decision !== "allow") {
-    return NextResponse.redirect(withQuery(redirectUri, { error: "access_denied", state }));
+    return NextResponse.redirect(withQuery(redirectUri, { error: "access_denied", state }), 303);
   }
 
   const { plainCode, codeHash, expiresAt } = generateAuthorizationCode();
@@ -52,5 +55,5 @@ export async function POST(req: NextRequest) {
     expiresAt,
   });
 
-  return NextResponse.redirect(withQuery(redirectUri, { code: plainCode, state }));
+  return NextResponse.redirect(withQuery(redirectUri, { code: plainCode, state }), 303);
 }
