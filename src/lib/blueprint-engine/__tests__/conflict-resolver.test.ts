@@ -91,6 +91,31 @@ describe("conflict-resolver: computeResolutionOptions", () => {
   });
 });
 
+describe("conflict-resolver: entity_registry (ENTITY-UNKNOWN-*)", () => {
+  it("is resolvable and registers a stub entity — structural-completeness.ts's per-document check, a separate issue shape from CONSISTENCY-MODEL-ENTITY-", () => {
+    const unknownIssue = issue({
+      id: "ENTITY-UNKNOWN-freezers",
+      category: "entity_registry",
+      message: 'Document references unknown table "freezers" not in the canonical model',
+      resolution: 'Remove "freezers" or add it to the project blueprint entity registry',
+      documentTypes: ["trd"],
+    });
+
+    expect(isResolvableIssue(unknownIssue)).toBe(true);
+    expect(computeResolutionOptions(unknownIssue)).toHaveLength(1);
+
+    const result = patchBlueprintFromIssues(baseBlueprint, [unknownIssue]);
+
+    expect(result.blueprint.entities.freezers).toBeDefined();
+    expect(result.resolvedIssueIds).toContain(unknownIssue.id);
+    expect(result.patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "entity_registry", entity: "freezers", sourceDocument: "trd" }),
+      ])
+    );
+  });
+});
+
 describe("conflict-resolver: backward compatibility", () => {
   it("applies the existing single-patch behavior unchanged when no selections map is passed", () => {
     const entityIssue = issue({
