@@ -17,7 +17,7 @@ import {
   wizardStackFromBlueprint,
 } from "@/lib/blueprint-engine/apply-architecture-resolution";
 import { assumptionEntrySchema } from "@/lib/zod/blueprint-schemas";
-import { triggerBackground } from "@/lib/trigger-background";
+import { queuePendingDocuments } from "@/lib/mcp-studio/document-orchestration";
 
 const patchSchema = z.object({
   stack: z
@@ -210,30 +210,15 @@ export async function POST(
     })
     .where(eq(projects.id, projectId));
 
-  const pendingDocs = await db
-    .select()
-    .from(documents)
-    .where(and(eq(documents.projectId, projectId), eq(documents.status, "pending")));
-
   const siteUrl =
     process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
 
-  for (const doc of pendingDocs) {
-    await db
-      .update(documents)
-      .set({ status: "generating", updatedAt: new Date() })
-      .where(eq(documents.id, doc.id));
-
-    await triggerBackground(`${siteUrl}/.netlify/functions/generate-background`, {
-      projectId,
-      documentType: doc.type,
-      userId,
-    });
-  }
+  const { queued, dispatchFailures } = await queuePendingDocuments(projectId, userId, siteUrl);
 
   return NextResponse.json({
     success: true,
     approvedAt: approvedBlueprint.metadata.modelApprovedAt,
-    generationQueued: pendingDocs.length,
+    generationQueued: queued,
+    dispatchFailures,
   });
 }
