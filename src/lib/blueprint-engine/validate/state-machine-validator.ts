@@ -1,6 +1,10 @@
 import type { ProjectBlueprint, ValidationIssue } from "@/lib/zod/blueprint-schemas";
 import type { DocumentSnapshot } from "@/lib/blueprint-engine/validate/readiness";
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const TRANSITION_PATTERN =
   /\b([A-Z][A-Z0-9_]*)\s*(?:→|->|—>|to)\s*([A-Z][A-Z0-9_]*)\b/g;
 
@@ -188,7 +192,7 @@ export function validateStateTransitionsInDocument(
     );
 
     const hasProximityIssue = preSuccessStates.some((state) => {
-      const stateRegex = new RegExp(`\\b${state}\\b`, "gi");
+      const stateRegex = new RegExp(`\\b${escapeRegExp(state)}\\b`, "gi");
       for (const stateMatch of content.matchAll(stateRegex)) {
         const index = stateMatch.index ?? 0;
         if (mentionIsInTransitionChain(content, index)) continue;

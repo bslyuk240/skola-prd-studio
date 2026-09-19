@@ -1,5 +1,9 @@
 import { filterWorkflowStates } from "@/lib/blueprint-engine/validate/entity-reference-extraction";
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export type DocumentClaims = {
   documentType: string;
   uploadTypes: string[];
@@ -120,7 +124,10 @@ export function extractRoles(text: string, knownRoles: string[] = []): string[] 
   const roles = new Set<string>();
   for (const role of knownRoles) {
     const spaced = role.replace(/_/g, " ");
-    if (new RegExp(`\\b${spaced}\\b`, "i").test(text) || new RegExp(`\\b${role}\\b`, "i").test(text)) {
+    if (
+      new RegExp(`\\b${escapeRegExp(spaced)}\\b`, "i").test(text) ||
+      new RegExp(`\\b${escapeRegExp(role)}\\b`, "i").test(text)
+    ) {
       roles.add(role);
     }
   }
