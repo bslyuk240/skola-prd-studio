@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   ArrowLeft, Download, FileText, Code2, FileCode,
   CheckCircle2, Clock, Loader2, Shield, GitBranch,
-  Database, Map, Palette, Layers, ExternalLink,
+  Database, Map, Palette, Layers, ExternalLink, AlertTriangle,
 } from "lucide-react";
 import { cn, scoreColor } from "@/lib/utils";
 import type { IntegrityReport } from "@/lib/blueprint-engine/integrity-report";
@@ -77,14 +77,11 @@ export function ExportClient({
   const [downloading, setDownloading] = useState<string | null>(null);
 
   async function download(format: string, ext: string) {
-    if (!integrityReport.canExport) {
-      toast.error("Resolve blocking integrity errors before exporting.");
-      return;
-    }
-
     setDownloading(format);
     try {
-      const res = await fetch(`/api/projects/${project.id}/export?format=${format}`);
+      const query = new URLSearchParams({ format });
+      if (exportBlocked) query.set("force", "true");
+      const res = await fetch(`/api/projects/${project.id}/export?${query.toString()}`);
       if (res.status === 409) {
         const data = await res.json().catch(() => ({}));
         toast.error(data.error ?? "Export blocked by integrity errors.");
@@ -177,15 +174,15 @@ export function ExportClient({
           <Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-amber-800">
-              Export blocked — {integrityReport.errorCount} integrity{" "}
-              {integrityReport.errorCount === 1 ? "error" : "errors"} remain
+              {integrityReport.errorCount} integrity {integrityReport.errorCount === 1 ? "error" : "errors"} unresolved
             </p>
             <p className="text-xs text-amber-700 mt-0.5">
               Resolve conflicts on the{" "}
               <Link href={`/projects/${project.id}/documents`} className="underline font-medium">
                 Documents
               </Link>{" "}
-              page before downloading. Add <code className="font-mono">?force=true</code> to override via API only.
+              page for a clean export, or use Export Anyway below — the affected sections will still
+              contain the unresolved conflicts, which may confuse a downstream coding agent.
             </p>
           </div>
         </div>
@@ -232,13 +229,23 @@ export function ExportClient({
               </div>
               <Button
                 onClick={() => download(format, ext)}
-                disabled={downloading !== null || exportBlocked}
-                className="w-full gap-2"
-                variant={id === "html" ? "default" : "outline"}
+                disabled={downloading !== null}
+                className={cn("w-full gap-2", exportBlocked && "border-amber-300 text-amber-800 hover:bg-amber-50")}
+                variant={exportBlocked ? "outline" : id === "html" ? "default" : "outline"}
               >
-                {downloading === format
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
-                  : <><Download className="w-4 h-4" /> Download {ext}</>}
+                {downloading === format ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Generating…
+                  </>
+                ) : exportBlocked ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4" /> Export Anyway ({ext})
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" /> Download {ext}
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>

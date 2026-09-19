@@ -1,4 +1,4 @@
-import type { ProjectBlueprint, ValidationIssue } from "@/lib/zod/blueprint-schemas";
+import type { ProjectBlueprint, ValidationIssue, ResolutionOption } from "@/lib/zod/blueprint-schemas";
 import {
   applyGlossaryToBlueprint,
   mergeGlossaryEntries,
@@ -20,13 +20,6 @@ export type ConflictResolutionResult = {
   resolvedIssueIds: string[];
 };
 
-const RESOLVABLE_CATEGORIES = new Set([
-  "terminology",
-  "consistency",
-  "entity",
-  "architecture",
-]);
-
 function parseTerminologyIssue(message: string): { canonical: string; synonym: string } | null {
   const match = message.match(/Use "([^"]+)" instead of "([^"]+)"/);
   if (!match) return null;
@@ -45,6 +38,12 @@ function parseApiIssueId(id: string): { documentType: string; method: string; pa
   return { documentType: match[1], method: match[2], path: match[3] };
 }
 
+function parseStructMissingIssueId(id: string): { entity: string } | null {
+  const match = id.match(/^STRUCT-missing-(.+)$/);
+  if (!match) return null;
+  return { entity: match[1] };
+}
+
 function nextApiId(blueprint: ProjectBlueprint): string {
   const numbers = blueprint.apis
     .map((api) => Number.parseInt(api.id.replace(/\D/g, ""), 10))
@@ -57,8 +56,14 @@ function nextApiId(blueprint: ProjectBlueprint): string {
 export function patchBlueprintFromIssues(
   blueprint: ProjectBlueprint,
   issues: ValidationIssue[],
-  documents: DocumentSnapshot[] = []
+  documents: DocumentSnapshot[] = [],
+  // Reserved for issues with more than one resolution option (see
+  // computeResolutionOptions). Every option today is the sole option for its
+  // issue, so this isn't branched on yet — kept so the API/route layer has a
+  // stable place to pass a user's choice once a validator offers a real one.
+  selections: Record<string, string> = {}
 ): ConflictResolutionResult {
+  void selections;
   let nextBlueprint: ProjectBlueprint = { ...blueprint, glossary: [...blueprint.glossary] };
   const patches: BlueprintPatch[] = [];
   const resolvedIssueIds: string[] = [];
@@ -115,6 +120,31 @@ export function patchBlueprintFromIssues(
       kind: "entity_registry",
       entity: entity.entity,
       sourceDocument: entity.documentType,
+    });
+    resolvedIssueIds.push(issue.id);
+  }
+
+  for (const issue of errorIssues) {
+    const structMissing = parseStructMissingIssueId(issue.id);
+    if (!structMissing || nextBlueprint.entities[structMissing.entity]) continue;
+
+    nextBlueprint = {
+      ...nextBlueprint,
+      entities: {
+        ...nextBlueprint.entities,
+        [structMissing.entity]: {
+          id: structMissing.entity,
+          tableName: structMissing.entity,
+          description: "Required table for AI-agent products — registered by architect critic",
+          fields: [],
+          complete: false,
+        },
+      },
+    };
+    patches.push({
+      kind: "entity_registry",
+      entity: structMissing.entity,
+      sourceDocument: "blueprint_model",
     });
     resolvedIssueIds.push(issue.id);
   }
@@ -200,15 +230,41 @@ function mergeUploadTypesFromDocuments(documents: DocumentSnapshot[]): string[] 
   return normalizeUploadTypes(merged);
 }
 
+// Deliberately an allowlist, not a category-based guess: every prefix here
+// must have a matching branch in patchBlueprintFromIssues. A broader
+// `RESOLVABLE_CATEGORIES.has(issue.category)` fallback used to live here and
+// falsely marked CONSISTENCY-SEM-*/CONSISTENCY-ENTITY-* (cross-document
+// drift — e.g. two docs disagreeing on which tables exist) as resolvable
+// even though no patch exists for them, so "fix" silently no-opped on those
+// specific issues forever. They need real content written into a document,
+// not a model patch, so they should fall through to the regenerate-document
+// path instead (see the !issueAcceptable branch in
+// blueprint-integrity-report.tsx).
 export function isResolvableIssue(issue: ValidationIssue): boolean {
   if (issue.severity !== "error") return false;
   if (issue.category === "terminology") return true;
   if (issue.id.startsWith("CONSISTENCY-MODEL-ENTITY-")) return true;
   if (issue.id.startsWith("CONSISTENCY-MODEL-API-")) return true;
   if (issue.id.startsWith("CONSISTENCY-UPLOAD-")) return true;
-  if (issue.id.startsWith("CONSISTENCY-SEM-")) return true;
-  if (issue.id.startsWith("CONSISTENCY-ENTITY-")) return true;
-  return RESOLVABLE_CATEGORIES.has(issue.category) && issue.documentTypes.length > 0;
+  if (issue.id.startsWith("STRUCT-missing-")) return true;
+  return false;
+}
+
+/**
+ * Candidate fixes for an issue. Every resolvable issue today has exactly one
+ * correct patch (these validators only check "is X registered in the
+ * canonical model"), so this always returns 0 or 1 options. The shape is
+ * plural so a future validator with a genuine either/or fix — and the UI/API
+ * layers that consume it — don't need another migration to support it.
+ */
+export function computeResolutionOptions(issue: ValidationIssue): ResolutionOption[] {
+  if (!isResolvableIssue(issue)) return [];
+  return [
+    {
+      id: "default",
+      label: issue.resolution ?? "Apply fix",
+    },
+  ];
 }
 
 export function affectedDocumentTypes(issues: ValidationIssue[]): string[] {

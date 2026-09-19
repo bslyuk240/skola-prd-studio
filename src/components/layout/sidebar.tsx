@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -48,6 +49,11 @@ export function Sidebar({ projectId: projectIdProp, projectName }: SidebarProps)
   const pathname = usePathname();
   const { signOut } = useClerk();
   const { user } = useUser();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const role =
     (user?.publicMetadata?.role as string | undefined) ??
@@ -181,15 +187,27 @@ export function Sidebar({ projectId: projectIdProp, projectName }: SidebarProps)
         })}
         {/* Account row */}
         <div className="flex items-center gap-2.5 px-3 py-2 mt-1">
-          <UserButton />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-sidebar-foreground truncate">
-              {user?.fullName ?? user?.firstName ?? "Account"}
-            </p>
-            <p className="text-xs text-sidebar-foreground/50 truncate">
-              {user?.emailAddresses[0]?.emailAddress ?? ""}
-            </p>
-          </div>
+          {mounted ? (
+            <>
+              <UserButton />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-sidebar-foreground truncate">
+                  {user?.fullName ?? user?.firstName ?? "Account"}
+                </p>
+                <p className="text-xs text-sidebar-foreground/50 truncate">
+                  {user?.emailAddresses[0]?.emailAddress ?? ""}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-7 h-7 rounded-full bg-sidebar-accent/40 animate-pulse shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="h-3 w-20 rounded bg-sidebar-accent/40 animate-pulse" />
+                <div className="h-3 w-28 rounded bg-sidebar-accent/30 animate-pulse" />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Sign out */}

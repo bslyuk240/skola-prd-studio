@@ -5,7 +5,7 @@ import {
   type DocumentSnapshot,
   type ReadinessScoreOptions,
 } from "@/lib/blueprint-engine/validate/readiness";
-import { isResolvableIssue } from "@/lib/blueprint-engine/critic/conflict-resolver";
+import { isResolvableIssue, computeResolutionOptions } from "@/lib/blueprint-engine/critic/conflict-resolver";
 
 export type IntegrityStatus = "pass" | "warning" | "fail";
 
@@ -78,9 +78,13 @@ export function buildIntegrityReport(
     };
   }
 
-  const { issues, breakdown } = runBlueprintValidation(blueprint, documents, {
+  const { issues: rawIssues, breakdown } = runBlueprintValidation(blueprint, documents, {
     openSecurityTodos: options.openSecurityTodos,
     totalSecurityTodos: options.totalSecurityTodos,
+  });
+  const issues = rawIssues.map((issue) => {
+    const resolutionOptions = computeResolutionOptions(issue);
+    return resolutionOptions.length > 0 ? { ...issue, resolutionOptions } : issue;
   });
   const errorCount = issues.filter((issue) => issue.severity === "error").length;
   const warningCount = issues.filter((issue) => issue.severity === "warning").length;
