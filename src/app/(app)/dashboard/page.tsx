@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { formatRelative, scoreColor, scoreLabel } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CreditUsageWidget } from "@/components/dashboard/credit-usage-widget";
+import { DeleteProjectButton } from "@/components/dashboard/delete-project-button";
 
 const DOC_LABELS: Record<string, string> = {
   prd: "PRD",
@@ -189,9 +190,12 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          {formatRelative(project.updatedAt)}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            {formatRelative(project.updatedAt)}
+                          </div>
+                          <DeleteProjectButton projectId={project.id} projectName={project.name} />
                         </div>
                         <Link href={`/projects/${project.id}/documents`}>
                           <Button size="sm" variant="outline" className="gap-1">
