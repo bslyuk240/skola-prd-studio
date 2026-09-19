@@ -9,6 +9,7 @@ import {
   Check,
   Loader2,
   FileText, GitBranch, BookOpen,
+  Plug, Plus, Trash2, Copy, KeyRound,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,9 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -25,6 +29,7 @@ const TABS = [
   { id: "ai", label: "AI Model", icon: Bot },
   { id: "security", label: "Security Defaults", icon: Shield },
   { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "developer", label: "Developer / MCP", icon: Plug },
   { id: "usage", label: "Usage", icon: Zap },
 ] as const;
 
@@ -395,9 +400,240 @@ function UsageTabContent({ initialLimit }: { initialLimit: number }) {
   );
 }
 
+interface ApiKeySummary {
+  id: string;
+  name: string;
+  status: "active" | "revoked";
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+function DeveloperTabContent() {
+  const [keys, setKeys] = useState<ApiKeySummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [keyName, setKeyName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [revealedToken, setRevealedToken] = useState<{ name: string; token: string; configSample: string } | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  function loadKeys() {
+    setLoading(true);
+    fetch("/api/user/api-keys")
+      .then((r) => r.json())
+      .then((d) => setKeys(d.keys ?? []))
+      .catch(() => toast.error("Failed to load API keys."))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    fetch("/api/user/api-keys")
+      .then((r) => r.json())
+      .then((d) => setKeys(d.keys ?? []))
+      .catch(() => toast.error("Failed to load API keys."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function createKey() {
+    if (!keyName.trim()) {
+      toast.error("Give the key a name, e.g. \"Claude Code\" or \"Cursor\".");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch("/api/user/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: keyName.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to create key");
+      const data = await res.json();
+      setRevealedToken({
+        name: data.name,
+        token: data.plainTextToken,
+        configSample: JSON.stringify(data.mcpConfigSample, null, 2),
+      });
+      setDialogOpen(false);
+      setKeyName("");
+      loadKeys();
+    } catch {
+      toast.error("Failed to create API key.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revokeKey(id: string) {
+    setRevokingId(id);
+    try {
+      const res = await fetch(`/api/user/api-keys/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to revoke");
+      toast.success("API key revoked.");
+      loadKeys();
+    } catch {
+      toast.error("Failed to revoke API key.");
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  function copy(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied!`);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Developer / MCP</h2>
+          <p className="text-muted-foreground text-sm mt-0.5 max-w-2xl">
+            Generate a personal API key to connect Claude Code, Cursor, or another MCP-compatible IDE agent to your account. One key gives an agent tools to create projects, generate documents, add features, and run security scans on your behalf.
+          </p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger
+            render={
+              <Button size="sm" className="gap-1.5 shrink-0">
+                <Plus className="w-4 h-4" />
+                New API Key
+              </Button>
+            }
+          />
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>New API Key</DialogTitle>
+              <DialogDescription>Name it after the tool that will use it, e.g. &quot;Claude Code&quot;.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor="key-name" className="text-xs text-muted-foreground">Name</Label>
+              <Input
+                id="key-name"
+                value={keyName}
+                onChange={(e) => setKeyName(e.target.value)}
+                placeholder="Claude Code"
+              />
+            </div>
+            <DialogFooter>
+              <Button onClick={createKey} disabled={creating} className="gap-1.5">
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                Generate Key
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {revealedToken && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">&quot;{revealedToken.name}&quot; created</CardTitle>
+            <CardDescription className="text-xs">
+              Copy this token now — it will not be shown again. Add the config block below to your IDE&apos;s MCP settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-6 pb-6 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Token</Label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs font-mono bg-muted rounded-lg px-3 py-2 break-all">{revealedToken.token}</code>
+                <Button size="sm" variant="outline" onClick={() => copy(revealedToken.token, "Token")} className="gap-1.5 shrink-0">
+                  <Copy className="w-3.5 h-3.5" /> Copy
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">MCP config (add to your IDE&apos;s mcp.json)</Label>
+              <div className="relative">
+                <pre className="text-xs font-mono bg-muted rounded-lg p-3 overflow-x-auto">{revealedToken.configSample}</pre>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => copy(revealedToken.configSample, "Config")}
+                  className="absolute top-2 right-2 gap-1.5"
+                >
+                  <Copy className="w-3.5 h-3.5" /> Copy
+                </Button>
+              </div>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setRevealedToken(null)}>Done</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">API Keys</CardTitle>
+          <CardDescription className="text-xs">Keys with account-wide access to create projects, generate documents, add features, and run security scans.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-12 bg-muted rounded-lg animate-pulse" />
+              <div className="h-12 bg-muted rounded-lg animate-pulse" />
+            </div>
+          ) : keys.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No API keys yet. Generate one to connect an IDE agent.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {keys.map((key) => (
+                <div key={key.id} className="flex items-center justify-between py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground truncate">{key.name}</p>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs py-0",
+                          key.status === "active" ? "text-emerald-600 border-emerald-200" : "text-muted-foreground"
+                        )}
+                      >
+                        {key.status === "active" ? "Active" : "Revoked"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Created {new Date(key.createdAt).toLocaleDateString()}
+                      {key.lastUsedAt ? ` · Last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : " · Never used"}
+                    </p>
+                  </div>
+                  {key.status === "active" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => revokeKey(key.id)}
+                      disabled={revokingId === key.id}
+                      className="gap-1.5 text-destructive hover:text-destructive shrink-0"
+                    >
+                      {revokingId === key.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="bg-muted/50 border border-border rounded-xl p-4">
+        <p className="text-xs font-medium text-foreground mb-1">What can a connected agent do?</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          list_projects, create_project, generate_document, generate_all_documents, get_project_status, get_document, export_project, request_feature, generate_feature_document, generate_all_feature_documents, get_feature_status, get_feature_document, run_security_scan, get_security_scan. Document generation is asynchronous — the agent kicks off generation and polls status.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsClient({ user, prefs }: Props) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>("account");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // AI model
   const [selectedModel, setSelectedModel] = useState(
@@ -519,7 +755,11 @@ export function SettingsClient({ user, prefs }: Props) {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Manage →</span>
-                      <UserButton />
+                      {mounted ? (
+                        <UserButton />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-muted animate-pulse" />
+                      )}
                     </div>
                   </div>
                   <Separator />
@@ -695,6 +935,9 @@ export function SettingsClient({ user, prefs }: Props) {
             </Button>
           </div>
         )}
+
+        {/* ── Developer / MCP ── */}
+        {activeTab === "developer" && <DeveloperTabContent />}
 
         {/* ── Usage ── */}
         {activeTab === "usage" && <UsageTabContent initialLimit={prefs.creditLimit} />}

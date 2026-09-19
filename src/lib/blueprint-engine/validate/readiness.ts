@@ -58,11 +58,20 @@ export function runBlueprintValidation(
     })),
   ];
 
+  const terminologyIssuesById = new Map<string, ValidationIssue>();
   for (const doc of readyDocuments) {
-    issues.push(...lintTerminology(blueprint, doc.content, doc.type).issues);
+    for (const issue of lintTerminology(blueprint, doc.content, doc.type).issues) {
+      const existing = terminologyIssuesById.get(issue.id);
+      if (existing) {
+        existing.documentTypes = [...new Set([...existing.documentTypes, ...issue.documentTypes])];
+      } else {
+        terminologyIssuesById.set(issue.id, { ...issue });
+      }
+    }
     issues.push(...validateEntityReferencesInText(blueprint, doc.content, doc.type));
     issues.push(...codeSnippetIssuesFromContent(doc.content, doc.type));
   }
+  issues.push(...terminologyIssuesById.values());
 
   if (canValidateCategory("conflicts", documentsWithStatus) && readyDocuments.length > 0) {
     issues.push(...validateDocumentConsistency(blueprint, readyDocuments));

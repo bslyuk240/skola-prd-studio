@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   FileText, Shield, Database, GitBranch, Map, Palette,
   Loader2, RefreshCw, Eye, CheckCircle2, Clock, AlertCircle, Wand2, Download,
-  Layers, ClipboardCheck, Rocket,
+  Layers, ClipboardCheck, Rocket, Wrench,
 } from "lucide-react";
 import { cn, scoreColor } from "@/lib/utils";
 import { isEieEnabledForProject } from "@/lib/eie/project-settings";
@@ -57,6 +57,7 @@ interface Props {
 export function DocumentsClient({ project, documents, integrityReport }: Props) {
   const router = useRouter();
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const [fixing, setFixing] = useState<Record<string, boolean>>({});
   const [eiePhase, setEiePhase] = useState<Record<string, boolean>>({});
   const eieEnabled = isEieEnabledForProject(project);
 
@@ -160,6 +161,34 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
     }
   }
 
+  async function fixDocument(documentType: string | null) {
+    const key = documentType ?? "__project_model__";
+    setFixing((p) => ({ ...p, [key]: true }));
+    try {
+      const res = await fetch(`/api/projects/${project.id}/integrity-report/fix-document`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentType }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error ?? "Could not auto-fix these issues");
+      }
+      const patchedCount = (data.patchedCount as number) ?? 0;
+      const remaining = (data.remainingIssueIds as string[] | undefined)?.length ?? 0;
+      toast.success(
+        remaining > 0
+          ? `Fixed ${patchedCount} ${patchedCount === 1 ? "issue" : "issues"} — ${remaining} still need manual review`
+          : `Fixed ${patchedCount} ${patchedCount === 1 ? "issue" : "issues"}`
+      );
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not auto-fix these issues");
+    } finally {
+      setFixing((p) => ({ ...p, [key]: false }));
+    }
+  }
+
   async function generateAll() {
     const pending = documents.filter((d) => d.status === "pending").map((d) => d.type);
     if (pending.length === 0) return toast.info("All documents are already generated.");
@@ -181,24 +210,16 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
           <p className="text-muted-foreground text-sm mt-0.5">{project.description}</p>
         </div>
         <div className="flex gap-2">
-          {integrityReport.canExport ? (
-            <Link href={`/projects/${project.id}/export`}>
-              <Button variant="outline" className="gap-2">
-                <Download className="w-4 h-4" />
-                Export
-              </Button>
-            </Link>
-          ) : (
+          <Link href={`/projects/${project.id}/export`}>
             <Button
               variant="outline"
               className="gap-2"
-              disabled
-              title="Resolve blocking integrity errors before export"
+              title={integrityReport.canExport ? undefined : "Blocking issues remain — you can still review and export anyway"}
             >
               <Download className="w-4 h-4" />
               Export
             </Button>
-          )}
+          </Link>
           <Button onClick={generateAll} className="gap-2">
             <Wand2 className="w-4 h-4" />
             Generate All
@@ -211,6 +232,8 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
         projectId={project.id}
         report={integrityReport}
         documents={documents}
+        onRegenerateDocument={generateDoc}
+        onFixDocument={fixDocument}
       />
 
       {/* Scores */}
@@ -294,6 +317,11 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
           const isGenerating = generating[type];
           const showEieStep = eieEnabled && (eiePhase[type] || isGenerating);
           const DocIcon = meta.icon;
+          const docIssues = integrityReport.issues.filter(
+            (issue) => issue.severity === "error" && issue.documentTypes.includes(type)
+          );
+          const fixableCount = docIssues.filter((issue) => (issue.resolutionOptions?.length ?? 0) > 0).length;
+          const isFixing = fixing[type];
 
           return (
             <Card key={type} className="hover:shadow-sm transition-shadow">
@@ -312,6 +340,12 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
                       {doc?.wordCount ? (
                         <span className="text-xs text-muted-foreground">{doc.wordCount.toLocaleString()} words</span>
                       ) : null}
+                      {fixableCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+                          <AlertCircle className="w-3 h-3" />
+                          {fixableCount} {fixableCount === 1 ? "issue" : "issues"}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -324,6 +358,27 @@ export function DocumentsClient({ project, documents, integrityReport }: Props) 
                       </Button>
                     </Link>
                   )}
+                  {fixableCount > 0 ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={() => fixDocument(type)}
+                      disabled={isFixing}
+                    >
+                      {isFixing ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Fixing…
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="w-3.5 h-3.5" />
+                          Fix {fixableCount}
+                        </>
+                      )}
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant={status === "pending" ? "default" : "ghost"}

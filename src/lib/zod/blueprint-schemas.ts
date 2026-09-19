@@ -183,12 +183,19 @@ export const backupRecoveryModelSchema = z.object({
   rtoMinutes: z.number().int().positive().optional(),
 });
 
+export const resolutionOptionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+});
+
 export const validationIssueSchema = z.object({
   id: z.string().min(1),
   severity: validationSeveritySchema,
   category: z.string().min(1),
   message: z.string().min(1),
   resolution: z.string().optional(),
+  resolutionOptions: z.array(resolutionOptionSchema).optional(),
   documentTypes: z.array(z.string()).default([]),
 });
 
@@ -290,6 +297,7 @@ export const projectBlueprintSchema = z.object({
 
 export type ProjectBlueprint = z.infer<typeof projectBlueprintSchema>;
 export type ValidationIssue = z.infer<typeof validationIssueSchema>;
+export type ResolutionOption = z.infer<typeof resolutionOptionSchema>;
 export type AssumptionKind = z.infer<typeof assumptionKindSchema>;
 export type ModelProfile = z.infer<typeof modelProfileSchema>;
 

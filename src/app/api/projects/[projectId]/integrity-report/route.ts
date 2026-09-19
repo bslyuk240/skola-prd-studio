@@ -10,6 +10,7 @@ import { buildIntegrityReport } from "@/lib/blueprint-engine/integrity-report";
 
 const acceptSchema = z.object({
   issueId: z.string().min(1),
+  optionId: z.string().optional(),
 });
 
 export async function GET(
@@ -92,7 +93,8 @@ export async function POST(
   const { blueprint: patchedBlueprint, patches } = patchBlueprintFromIssues(
     blueprint,
     [issue],
-    snapshots
+    snapshots,
+    { [issue.id]: parsed.data.optionId ?? "default" }
   );
 
   if (patches.length === 0) {

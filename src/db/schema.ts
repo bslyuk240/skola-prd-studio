@@ -265,6 +265,26 @@ export type AgentSession = typeof agentSessions.$inferSelect;
 export type AgentLog = typeof agentLogs.$inferSelect;
 export type AgentQuestion = typeof agentQuestions.$inferSelect;
 
+// ─── Personal API Keys (account-level MCP connector) ──────────────────────────
+// Unlike agentConnections (scoped to one project's build-task handoff), a
+// personal API key is scoped to the whole account so an IDE agent can create
+// projects, add features, and run scans across the user's account.
+
+export const personalApiKeyStatusEnum = pgEnum("personal_api_key_status", ["active", "revoked"]);
+
+export const personalApiKeys = pgTable("personal_api_keys", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(), // Clerk user ID
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").unique().notNull(), // SHA-256 hash of the issued bearer token
+  status: personalApiKeyStatusEnum("status").default("active").notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at"),
+});
+
+export type PersonalApiKey = typeof personalApiKeys.$inferSelect;
+
 export const exports = pgTable("exports", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id")

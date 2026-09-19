@@ -68,4 +68,26 @@ describe("integrity report", () => {
     expect(report.breakdown.categoryStates.schema).toBe("pending");
     expect(report.breakdown.overall).toBeNull();
   });
+
+  it("merges the same terminology drift found across multiple documents into one issue", () => {
+    const report = buildIntegrityReport(blueprint, [
+      {
+        type: "backend_schema",
+        content: "The tool_calls table stores pending work.",
+        status: "ready",
+      },
+      {
+        type: "app_flow",
+        content: "Approvers review tool_calls before execution.",
+        status: "ready",
+      },
+    ]);
+
+    const driftIssues = report.issues.filter(
+      (issue) => issue.id === "TERM-tool_executions-tool_calls"
+    );
+
+    expect(driftIssues).toHaveLength(1);
+    expect(driftIssues[0].documentTypes.sort()).toEqual(["app_flow", "backend_schema"]);
+  });
 });

@@ -1,9 +1,18 @@
 /** Extract only explicit SQL/schema table references — not columns, enums, or prose. */
 
+// SQL keywords are matched case-SENSITIVELY (uppercase only), matching how
+// real SQL/schema content is always written in this codebase's docs (see
+// entity-reference-extraction.test.ts fixtures). Case-insensitive matching
+// here previously caused false positives on ordinary prose — e.g. "drafts
+// operational update messages" matched `UPDATE\s+(\w+)` and flagged
+// "messages" as an unregistered table, even though the sentence has nothing
+// to do with SQL. The last two patterns keep `i` since their anchor phrases
+// ("... table", "table:"/"entity:") are specific enough not to false-positive
+// on common English words.
 const EXPLICIT_TABLE_PATTERNS: RegExp[] = [
-  /CREATE TABLE (?:IF NOT EXISTS )?([a-z][a-z0-9_]+)/gi,
-  /(?:FROM|JOIN|INTO|UPDATE)\s+([a-z][a-z0-9_]+)/gi,
-  /REFERENCES\s+([a-z][a-z0-9_]+)/gi,
+  /CREATE TABLE (?:IF NOT EXISTS )?([a-z][a-z0-9_]+)/g,
+  /(?:FROM|JOIN|INTO|UPDATE)\s+([a-z][a-z0-9_]+)/g,
+  /REFERENCES\s+([a-z][a-z0-9_]+)/g,
   /\b([a-z][a-z0-9_]+)\s+table\b/gi,
   /(?:entity|table):\s*([a-z][a-z0-9_]+)/gi,
 ];

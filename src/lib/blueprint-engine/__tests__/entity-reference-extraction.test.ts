@@ -34,6 +34,21 @@ describe("entity-reference-extraction", () => {
     expect(refs).not.toContain("clerk_secret_key");
   });
 
+  it("does not mistake lowercase SQL-verb prose for schema references", () => {
+    const text = `
+      Uses the BALANCED LLM profile to identify delivery delays and drafts
+      operational update messages. High-risk actions (e.g., messaging a
+      vendor about a penalty) are automatically routed to the approval
+      center. Results from testing show strong adoption; log into the
+      dashboard to review references cited in the audit trail.
+    `;
+    const refs = extractExplicitTableReferences(text);
+    expect(refs).not.toContain("messages");
+    expect(refs).not.toContain("testing");
+    expect(refs).not.toContain("dashboard");
+    expect(refs).not.toContain("cited");
+  });
+
   it("ignores backtick column names and enum values", () => {
     const text = `
       | \`agent_id\` | uuid | FK to agents |
