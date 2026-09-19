@@ -34,7 +34,10 @@ function featureHaystack(ctx: Pick<
 }
 
 export function inferSalesCrmDomain(ctx: ProjectContext): boolean {
-  return /\bsales\b|\bleads?\b|\bcrm\b|\bpipeline\b|sales.rep|sales_representative/i.test(
+  // Bare "sales" is too common in ordinary product copy (e.g. a "retail sales" module
+  // description) to signal a CRM/sales-pipeline domain on its own. Require it to appear
+  // alongside a CRM-specific qualifier, or match one of the other CRM-specific terms directly.
+  return /\bcrm\b|\bpipeline\b|\bleads?\b|\bsales[\s_-]?(?:rep(?:resentative)?s?|agents?|team|pipeline|funnel|lead(?:s)?)\b|sales.rep|sales_representative/i.test(
     featureHaystack(ctx)
   );
 }

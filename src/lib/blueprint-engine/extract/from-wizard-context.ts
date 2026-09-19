@@ -30,7 +30,11 @@ function inferAiAgents(ctx: ProjectContext): boolean {
     .join(" ")
     .toLowerCase();
 
-  return /(\bagents?\b|\bai employee\b|\bautonom|\bllm\b|\btool execution\b|\bworkflow run\b)/i.test(
+  // Bare "agent(s)" is too common in ordinary product copy (e.g. a support "agent",
+  // a POS staff "agent") to signal an AI-agent SaaS on its own. Require it to appear
+  // alongside an explicit AI/agent-platform qualifier, or match one of the other
+  // AI-agent-specific terms/integrations directly.
+  return /(\bai[\s-]?agents?\b|\bautonomous agents?\b|\bagentic\b|\bagent (?:action|approval|policy)s?\b|\bapprove agent\b|\bai[\s-]?employee\b|\bautonom(?:y|ous)\b|\bllm\b|\btool execution\b|\bworkflow run\b|\bai[\s-]?powered\b|\bai workforce\b|\bworkforce automation\b|\bopenrouter\b|\btrigger\.dev\b)/i.test(
     haystack
   );
 }
