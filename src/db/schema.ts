@@ -285,6 +285,52 @@ export const personalApiKeys = pgTable("personal_api_keys", {
 
 export type PersonalApiKey = typeof personalApiKeys.$inferSelect;
 
+// ─── OAuth 2.1 (MCP remote-connector auth) ─────────────────────────────────────
+// Lets the MCP endpoint be added through a native "Add custom connector" flow
+// (Claude's Connectors settings, etc.) that only takes a server URL and drives
+// the OAuth dance itself, instead of requiring a manually pasted Bearer token.
+
+export const oauthClients = pgTable("oauth_clients", {
+  id: uuid("id").defaultRandom().primaryKey(), // client_id
+  clientName: text("client_name"),
+  redirectUris: jsonb("redirect_uris").notNull(), // string[], set at Dynamic Client Registration
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  codeHash: text("code_hash").unique().notNull(),
+  clientId: uuid("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(), // Clerk user ID that approved the consent screen
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  scope: text("scope"),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const oauthTokens = pgTable("oauth_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: uuid("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  accessTokenHash: text("access_token_hash").unique().notNull(),
+  refreshTokenHash: text("refresh_token_hash").unique(),
+  scope: text("scope"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at").notNull(),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+  lastUsedAt: timestamp("last_used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type OAuthClient = typeof oauthClients.$inferSelect;
+export type OAuthToken = typeof oauthTokens.$inferSelect;
+
 export const exports = pgTable("exports", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id")

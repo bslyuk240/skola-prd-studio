@@ -10,6 +10,13 @@ const isPublicRoute = createRouteMatcher([
   "/api/mcp(.*)",
   // QStash / inline worker — auth via x-eie-internal-secret in route handler
   "/api/admin/eie/internal/process",
+  // OAuth 2.1 discovery/registration/token endpoints — called by MCP clients
+  // before they have a user session. /oauth/authorize and /api/oauth/authorize
+  // (the consent screen + its submit handler) stay protected on purpose.
+  "/.well-known/oauth-authorization-server",
+  "/.well-known/oauth-protected-resource",
+  "/api/oauth/register",
+  "/api/oauth/token",
 ]);
 
 const isAdminRoute = createRouteMatcher(["/admin/eie(.*)"]);

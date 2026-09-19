@@ -9,9 +9,12 @@ import {
   securityScans,
   securityFindings,
   personalApiKeys,
+  oauthTokens,
 } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { hashPersonalApiKey } from "@/lib/personal-api-keys";
+import { hashOauthToken } from "@/lib/oauth/tokens";
+import { siteUrlFromRequest } from "@/lib/site-url";
 import {
   mcpStudioRequestSchema,
   mcpStudioToolCallParamsSchema,
@@ -266,10 +269,28 @@ function toolResult(id: string | number | null | undefined, data: unknown) {
 
 const MCP_PROTOCOL_VERSION = "2024-11-05";
 
-async function authenticate(req: NextRequest) {
+/** Accepts either a static personal API key or an OAuth access token issued via /api/oauth/token. */
+async function authenticate(req: NextRequest): Promise<{ userId: string } | null> {
   const authHeader = req.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token) return null;
+
+  if (token.startsWith("prds_at_")) {
+    const tokenHash = hashOauthToken(token);
+    const [row] = await db
+      .select()
+      .from(oauthTokens)
+      .where(and(eq(oauthTokens.accessTokenHash, tokenHash), isNull(oauthTokens.revokedAt)))
+      .limit(1);
+    if (!row || row.accessTokenExpiresAt < new Date()) return null;
+
+    void db.update(oauthTokens).set({ lastUsedAt: new Date() }).where(eq(oauthTokens.id, row.id)).then(
+      () => {},
+      () => {}
+    );
+
+    return { userId: row.userId };
+  }
 
   const tokenHash = hashPersonalApiKey(token);
   const [key] = await db
@@ -285,7 +306,18 @@ async function authenticate(req: NextRequest) {
     () => {}
   );
 
-  return key;
+  return { userId: key.userId };
+}
+
+function unauthorized(req: NextRequest, id: string | number | null | undefined) {
+  const origin = siteUrlFromRequest(req);
+  return NextResponse.json(
+    { jsonrpc: "2.0", id: id ?? null, error: { code: -32001, message: "Unauthorized" } },
+    {
+      status: 401,
+      headers: { "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"` },
+    }
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -300,9 +332,9 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 202 });
   }
 
-  const apiKey = await authenticate(req);
-  if (!apiKey) return rpcError(id, -32001, "Unauthorized — invalid or revoked API key");
-  const userId = apiKey.userId;
+  const session = await authenticate(req);
+  if (!session) return unauthorized(req, id);
+  const userId = session.userId;
 
   if (method === "initialize") {
     return rpcResult(id, {
@@ -448,10 +480,6 @@ export async function POST(req: NextRequest) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function siteUrlFromRequest(req: NextRequest) {
-  return process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
-}
 
 async function getOwnedProject(userId: string, projectId: string) {
   const [project] = await db

@@ -409,6 +409,13 @@ interface ApiKeySummary {
   revokedAt: string | null;
 }
 
+interface OAuthConnectionSummary {
+  id: string;
+  clientName: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 function DeveloperTabContent() {
   const [keys, setKeys] = useState<ApiKeySummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -417,6 +424,9 @@ function DeveloperTabContent() {
   const [creating, setCreating] = useState(false);
   const [revealedToken, setRevealedToken] = useState<{ name: string; token: string; configSample: string } | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [oauthConnections, setOauthConnections] = useState<OAuthConnectionSummary[]>([]);
+  const [oauthLoading, setOauthLoading] = useState(true);
+  const [revokingOauthId, setRevokingOauthId] = useState<string | null>(null);
 
   function loadKeys() {
     setLoading(true);
@@ -427,13 +437,42 @@ function DeveloperTabContent() {
       .finally(() => setLoading(false));
   }
 
+  function loadOauthConnections() {
+    setOauthLoading(true);
+    fetch("/api/user/oauth-connections")
+      .then((r) => r.json())
+      .then((d) => setOauthConnections(d.connections ?? []))
+      .catch(() => toast.error("Failed to load connected apps."))
+      .finally(() => setOauthLoading(false));
+  }
+
   useEffect(() => {
     fetch("/api/user/api-keys")
       .then((r) => r.json())
       .then((d) => setKeys(d.keys ?? []))
       .catch(() => toast.error("Failed to load API keys."))
       .finally(() => setLoading(false));
+
+    fetch("/api/user/oauth-connections")
+      .then((r) => r.json())
+      .then((d) => setOauthConnections(d.connections ?? []))
+      .catch(() => toast.error("Failed to load connected apps."))
+      .finally(() => setOauthLoading(false));
   }, []);
+
+  async function revokeOauthConnection(id: string) {
+    setRevokingOauthId(id);
+    try {
+      const res = await fetch(`/api/user/oauth-connections/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to revoke");
+      toast.success("Connection revoked.");
+      loadOauthConnections();
+    } catch {
+      toast.error("Failed to revoke connection.");
+    } finally {
+      setRevokingOauthId(null);
+    }
+  }
 
   async function createKey() {
     if (!keyName.trim()) {
@@ -489,7 +528,7 @@ function DeveloperTabContent() {
         <div>
           <h2 className="text-xl font-bold text-foreground">Developer / MCP</h2>
           <p className="text-muted-foreground text-sm mt-0.5 max-w-2xl">
-            Generate a personal API key to connect Claude Code, Cursor, or another MCP-compatible IDE agent to your account. One key gives an agent tools to create projects, generate documents, add features, and run security scans on your behalf.
+            Connect Claude Code, Cursor, or another MCP-compatible agent to your account. Generate a personal API key below for CLI-based setups, or use a native &quot;Add custom connector&quot; screen with the server URL <code className="text-xs font-mono bg-muted rounded px-1 py-0.5">/api/mcp/studio/v1</code> — that flow signs you in and asks for approval automatically (see Connected Apps below).
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -609,6 +648,46 @@ function DeveloperTabContent() {
                       Revoke
                     </Button>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Connected Apps</CardTitle>
+          <CardDescription className="text-xs">
+            Apps added through a native &quot;Add custom connector&quot; flow (OAuth) instead of a pasted API key.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          {oauthLoading ? (
+            <div className="h-12 bg-muted rounded-lg animate-pulse" />
+          ) : oauthConnections.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No connected apps yet.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {oauthConnections.map((conn) => (
+                <div key={conn.id} className="flex items-center justify-between py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{conn.clientName || "MCP Client"}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Connected {new Date(conn.createdAt).toLocaleDateString()}
+                      {conn.lastUsedAt ? ` · Last used ${new Date(conn.lastUsedAt).toLocaleDateString()}` : " · Never used"}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => revokeOauthConnection(conn.id)}
+                    disabled={revokingOauthId === conn.id}
+                    className="gap-1.5 text-destructive hover:text-destructive shrink-0"
+                  >
+                    {revokingOauthId === conn.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    Revoke
+                  </Button>
                 </div>
               ))}
             </div>
