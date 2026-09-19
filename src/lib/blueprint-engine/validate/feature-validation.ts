@@ -7,6 +7,10 @@ import {
 } from "@/lib/blueprint-engine/validate/extract-claims";
 import { canonicalTableNames } from "@/lib/blueprint-engine/extract/build-feature-blueprint";
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function consistencyError(
   id: string,
   message: string,
@@ -121,7 +125,7 @@ function validateCanonicalTableUsage(
     const table = entity.tableName.toLowerCase();
     if (referenced.has(table)) continue;
 
-    const mentionsEntityId = new RegExp(`\\b${entityId}\\b`, "i").test(schemaDoc.content);
+    const mentionsEntityId = new RegExp(`\\b${escapeRegExp(entityId)}\\b`, "i").test(schemaDoc.content);
     const mentionsWrongAlias =
       /\buser_accounts\b/i.test(schemaDoc.content) &&
       table === "users" &&
