@@ -1,13 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { projects, documents } from "@/db/schema";
+import { projects } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { generateProjectDocument } from "@/lib/generate-project-document";
-import { triggerBackgroundWithResult } from "@/lib/trigger-background";
-import { getProjectBlueprint, ensureProjectBlueprint } from "@/lib/blueprint-engine/project-blueprint-service";
-import { isBlueprintModelApproved } from "@/lib/blueprint-engine/apply-architecture-resolution";
+import { dispatchSingleDocumentGeneration } from "@/lib/mcp-studio/document-orchestration";
 import { projectDocumentTypeSchema } from "@/lib/project-document-types";
 
 export const maxDuration = 60;
@@ -27,7 +24,6 @@ export async function POST(req: NextRequest) {
 
   const { projectId, documentType } = parsed.data;
 
-  // Verify ownership
   const [project] = await db
     .select()
     .from(projects)
@@ -36,91 +32,20 @@ export async function POST(req: NextRequest) {
 
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  const projectDocs = await db
-    .select()
-    .from(documents)
-    .where(eq(documents.projectId, projectId));
+  const siteUrl = process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
+  const outcome = await dispatchSingleDocumentGeneration(project, documentType, userId, siteUrl, {
+    autoApproveBlueprint: false,
+  });
 
-  let blueprint = await getProjectBlueprint(project);
-  if (!blueprint) {
-    blueprint = await ensureProjectBlueprint(project);
-  }
-
-  if (!isBlueprintModelApproved(blueprint, projectDocs)) {
+  if (outcome.status === "blocked") {
     return NextResponse.json(
-      {
-        error: "Approve the architecture model before generating documents",
-        code: "BLUEPRINT_NOT_APPROVED",
-      },
+      { error: "Approve the architecture model before generating documents", code: outcome.code },
       { status: 403 }
     );
   }
+  if (outcome.status === "generating") return NextResponse.json({ status: "generating" }, { status: 202 });
+  if (outcome.status === "generated") return NextResponse.json({ success: true, wordCount: outcome.wordCount });
 
-  // Mark document as generating
-  await db
-    .update(documents)
-    .set({ status: "generating", updatedAt: new Date() })
-    .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
-
-  // Hand off to a Netlify Background Function (15 min limit) so generation
-  // isn't bound by the ~10-26s sync function timeout. Falls back to running
-  // inline below when no background function is reachable (e.g. local dev
-  // without `netlify dev`). Use Netlify's own canonical site URL rather than
-  // req.nextUrl.origin, which can resolve to an internal/edge address.
-  const siteUrl = process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
-  const dispatch = await triggerBackgroundWithResult(
-    `${siteUrl}/.netlify/functions/generate-background`,
-    {
-      projectId,
-      documentType,
-      userId,
-    }
-  );
-  if (dispatch.dispatched) {
-    return NextResponse.json({ status: "generating" }, { status: 202 });
-  }
-
-  const onNetlify = Boolean(process.env.URL || process.env.NETLIFY);
-  if (onNetlify) {
-    await db
-      .update(documents)
-      .set({ status: "pending", updatedAt: new Date() })
-      .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
-
-    return NextResponse.json(
-      {
-        error: "Background generation dispatch failed",
-        detail:
-          dispatch.error ??
-          (dispatch.status === 403
-            ? "Background function rejected the request. Verify BACKGROUND_FUNCTION_SECRET matches in Netlify environment variables."
-            : "The background worker did not accept the generation job."),
-      },
-      { status: 503 }
-    );
-  }
-
-  try {
-    const { wordCount } = await generateProjectDocument(projectId, documentType, userId);
-    return NextResponse.json({ success: true, wordCount });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[generate] Error:", message, err);
-
-    const [doc] = await db
-      .select()
-      .from(documents)
-      .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)))
-      .limit(1);
-
-    await db
-      .update(documents)
-      .set({
-        status: doc?.content?.trim() ? "needs_revision" : "pending",
-        updatedAt: new Date(),
-      })
-      .where(and(eq(documents.projectId, projectId), eq(documents.type, documentType)));
-
-    return NextResponse.json({ error: "Generation failed", detail: message }, { status: 500 });
-  }
+  console.error("[generate] Error:", outcome.detail);
+  return NextResponse.json({ error: "Generation failed", detail: outcome.detail }, { status: 500 });
 }

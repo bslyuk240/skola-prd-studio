@@ -1,30 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { featureRequests, featureDocuments } from "@/db/schema";
+import { featureRequests } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { triggerBackground } from "@/lib/trigger-background";
-import {
-  generateFeatureDocument,
-  type FeatureDocumentType,
-} from "@/lib/generate-feature-document";
+import { dispatchSingleFeatureDocumentGeneration } from "@/lib/mcp-studio/feature-orchestration";
+import { featureDocTypeValues } from "@/lib/validators/feature-doc-types";
 
 export const maxDuration = 60;
 
 const schema = z.object({
   featureRequestId: z.string().min(1),
-  documentType: z.enum([
-    "feature_prd",
-    "impact_analysis",
-    "schema_changes",
-    "api_changes",
-    "ui_changes",
-    "security_checklist",
-    "implementation_tasks",
-    "test_plan",
-    "deployment_plan",
-  ]),
+  documentType: z.enum(featureDocTypeValues),
 });
 
 export async function POST(req: NextRequest) {
@@ -44,45 +31,12 @@ export async function POST(req: NextRequest) {
     .limit(1);
   if (!request) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db
-    .update(featureDocuments)
-    .set({ status: "generating", updatedAt: new Date() })
-    .where(
-      and(
-        eq(featureDocuments.featureRequestId, featureRequestId),
-        eq(featureDocuments.type, documentType)
-      )
-    );
-
   const siteUrl = process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? req.nextUrl.origin;
-  const dispatched = await triggerBackground(`${siteUrl}/.netlify/functions/feature-generate-background`, {
-    featureRequestId,
-    documentType,
-    userId,
-  });
-  if (dispatched) {
-    return NextResponse.json({ status: "generating" }, { status: 202 });
-  }
+  const outcome = await dispatchSingleFeatureDocumentGeneration(featureRequestId, documentType, userId, siteUrl);
 
-  try {
-    const result = await generateFeatureDocument(
-      featureRequestId,
-      documentType as FeatureDocumentType,
-      userId
-    );
-    return NextResponse.json({ success: true, wordCount: result.wordCount });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[feature/generate]", message);
-    await db
-      .update(featureDocuments)
-      .set({ status: "pending", updatedAt: new Date() })
-      .where(
-        and(
-          eq(featureDocuments.featureRequestId, featureRequestId),
-          eq(featureDocuments.type, documentType)
-        )
-      );
-    return NextResponse.json({ error: "Generation failed", detail: message }, { status: 500 });
-  }
+  if (outcome.status === "generating") return NextResponse.json({ status: "generating" }, { status: 202 });
+  if (outcome.status === "generated") return NextResponse.json({ success: true, wordCount: outcome.wordCount });
+
+  console.error("[feature/generate]", outcome.detail);
+  return NextResponse.json({ error: "Generation failed", detail: outcome.detail }, { status: 500 });
 }
